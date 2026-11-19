@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { tileTextures, floorRunes, sealTexture, planetTexture, ringTexture, softDot } from './textures.js';
+import { PALETTES } from './data.js';
 
 export const ARENA_R = 23;
 
@@ -14,7 +16,7 @@ function vnoise(x, y, z) {
 }
 function fbm(x, y, z) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 5; i++) { s += a * vnoise(x * f, y * f, z * f); f *= 2.03; a *= 0.5; } return s; }
 
-function bakeSky(W = 1024, H = 512) {
+function bakeSky(P, W = 1024, H = 512) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'), img = g.createImageData(W, H), d = img.data;
   for (let y = 0; y < H; y++) {
@@ -23,15 +25,16 @@ function bakeSky(W = 1024, H = 512) {
       const lon = x / W * Math.PI * 2; const dx = cl * Math.cos(lon), dz = cl * Math.sin(lon), dy = cy;
       const h = Math.max(0, dy);
       // base gradient: electric blue near horizon -> deep navy at zenith
-      let r = 2 + 12 * Math.pow(1 - h, 7), gg = 6 + 45 * Math.pow(1 - h, 6), b = 20 + 120 * Math.pow(1 - h, 5);
+      const k1 = Math.pow(1 - h, 6);
+      let r = P.zenith[0] + (P.horizon[0] - P.zenith[0]) * k1, gg = P.zenith[1] + (P.horizon[1] - P.zenith[1]) * k1, b = P.zenith[2] + (P.horizon[2] - P.zenith[2]) * k1;
       if (dy < 0) { const k = Math.min(1, -dy * 4); r *= 1 - k * 0.7; gg *= 1 - k * 0.7; b *= 1 - k * 0.6; }
       // nebula
       const n = fbm(dx * 2.2 + 3, dy * 2.2, dz * 2.2), n2 = fbm(dx * 4 + 9, dy * 4 + 2, dz * 4);
       const band = Math.exp(-Math.pow((dy - 0.25 - 0.25 * Math.sin(lon * 1.0 + 1)) * 3.0, 2));
       const neb = Math.max(0, n - 0.42) * 3.2 * band;
-      r += neb * (60 + 120 * n2); gg += neb * (90 + 40 * n2); b += neb * 255;
+      r += neb * P.neb[0] * (0.6 + 0.6 * n2); gg += neb * P.neb[1] * (0.6 + 0.6 * n2); b += neb * P.neb[2];
       const neb2 = Math.max(0, n2 - 0.55) * 2.5 * (0.4 + band);
-      r += neb2 * 140; gg += neb2 * 50; b += neb2 * 200; // purple wisps
+      r += neb2 * P.neb2[0] * 0.6; gg += neb2 * P.neb2[1] * 0.6; b += neb2 * P.neb2[2] * 0.6;
       const i = (y * W + x) * 4; d[i] = Math.min(255, r); d[i + 1] = Math.min(255, gg); d[i + 2] = Math.min(255, b); d[i + 3] = 255;
     }
   }
@@ -58,10 +61,17 @@ function jitter(geo, amt) {
 
 export function buildWorld(scene, renderer, quality) {
   const W = { update: null, lights: [] };
-  const sky = bakeSky(quality.low ? 768 : 1024, quality.low ? 384 : 512);
-  scene.background = sky;
-  const pm = new THREE.PMREMGenerator(renderer); const env = pm.fromEquirectangular(sky).texture; pm.dispose();
-  scene.environment = env;
+  const skyCache = {};
+  function skyFor(name) {
+    if (!skyCache[name]) {
+      const sky = bakeSky(PALETTES[name], quality.low ? 768 : 1024, quality.low ? 384 : 512);
+      const pm = new THREE.PMREMGenerator(renderer); const env = pm.fromEquirectangular(sky).texture; pm.dispose();
+      skyCache[name] = { sky, env, tiles: tileTextures(PALETTES[name].floor) };
+    }
+    return skyCache[name];
+  }
+  const first = skyFor('azure');
+  scene.background = first.sky; scene.environment = first.env;
   scene.environmentIntensity = 0.35;
   scene.fog = new THREE.FogExp2(0x030a1e, 0.004);
 
@@ -86,9 +96,15 @@ export function buildWorld(scene, renderer, quality) {
   const sun = new THREE.PointLight(0xb070ff, 0, 0); planet.add(sun);
 
   // ---- arena ----
-  const tt = tileTextures();
+  const tt = first.tiles;
   const floorMat = new THREE.MeshStandardMaterial({ map: tt.map, roughnessMap: tt.rough, roughness: 0.9, metalness: 0.6, envMapIntensity: 1.0 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA_R + 3, 72), floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  let mirror = null;
+  if (quality.reflect) {
+    mirror = new Reflector(new THREE.CircleGeometry(ARENA_R + 3, 48), { textureWidth: Math.round(innerWidth * 0.5), textureHeight: Math.round(innerHeight * 0.5), color: 0x8a96b8, clipBias: 0.003 });
+    mirror.rotation.x = -Math.PI / 2; mirror.position.y = -0.02; scene.add(mirror);
+    floorMat.transparent = true; floorMat.opacity = 0.8; floor.renderOrder = -1;
+  }
   const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1b2438, roughness: 0.75, metalness: 0.2 });
   const darkStone = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85, metalness: 0.1 });
   const base = new THREE.Mesh(new THREE.CylinderGeometry(ARENA_R + 3, ARENA_R - 2, 5, 72, 1, true), darkStone); base.position.y = -2.5; scene.add(base);
@@ -177,6 +193,42 @@ export function buildWorld(scene, renderer, quality) {
     const l = new THREE.PointLight(0x3ab8ff, 12, 18, 2); l.position.set(Math.sin(a) * (ARENA_R + 1), 2.5, Math.cos(a) * (ARENA_R + 1)); scene.add(l);
   }
 
+
+  // ---- braziers with spirit flames ----
+  const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 3.2), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+  const flames = [];
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2 + Math.PI / 8, r = ARENA_R - 0.6;
+    const g = new THREE.Group(); g.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 1.4, 8), darkStone); ped.position.y = 0.7; g.add(ped);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.35, 0.45, 10), stoneMat); bowl.position.y = 1.6; g.add(bowl);
+    const rimG = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.04, 6, 20), glowBlue); rimG.rotation.x = Math.PI / 2; rimG.position.y = 1.83; g.add(rimG);
+    for (let k = 0; k < 2; k++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.45 - k * 0.15, 1.4 - k * 0.3, 7, 1, true), flameMat); f.position.y = 2.4 - k * 0.1; g.add(f); flames.push(f); }
+    scene.add(g);
+  }
+  // ---- kneeling winged statues on the outer ring ----
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI + (i - 1.5) * 0.55, r = ARENA_R + 9;
+    const g = new THREE.Group(); g.position.set(Math.sin(a) * r, 0, Math.cos(a) * r); g.rotation.y = a + Math.PI;
+    const base2 = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 3), darkStone); base2.position.y = 0.6; g.add(base2);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 2.4, 8), stoneMat); body.position.y = 2.4; g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), stoneMat); head.position.y = 3.9; g.add(head);
+    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.2, 0.5), stoneMat); sword.position.set(0, 2.2, 0.9); g.add(sword);
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.05), glowCyan); eye.position.set(0, 3.95, 0.4); g.add(eye);
+    for (const s of [-1, 1]) {
+      const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(2.6, 1.8); sh.lineTo(2.2, 0.2); sh.lineTo(2.8, -0.6); sh.lineTo(1.6, -0.9); sh.lineTo(1.8, -2); sh.lineTo(0.3, -1.2); sh.closePath();
+      const w = new THREE.Mesh(new THREE.ShapeGeometry(sh), darkStone); w.material.side = THREE.DoubleSide; w.position.set(s * 0.3, 3.2, -0.4); w.scale.x = s; w.rotation.y = s * 0.5; g.add(w);
+    }
+    scene.add(g);
+  }
+  // ---- banners hanging from arches ----
+  const bannerMat = new THREE.MeshStandardMaterial({ color: 0x0a1028, emissive: 0x0a2a6a, emissiveIntensity: 0.6, side: THREE.DoubleSide, roughness: 0.8 });
+  const banners = [];
+  [Math.PI * 0.82, Math.PI * 1.18].forEach(a => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 5, 1, 8), bannerMat);
+    const r = ARENA_R + 7; m.position.set(Math.sin(a) * r, 5, Math.cos(a) * r); m.rotation.y = a; scene.add(m); banners.push(m);
+    const em = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), glowCyan); em.rotation.z = Math.PI / 4; em.position.copy(m.position); em.position.y += 0.8; em.rotation.y = a; em.translateZ(0.05); scene.add(em);
+  });
   // ---- floating islands ----
   const islands = [];
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x1a2236, roughness: 0.9, flatShading: true });
@@ -194,7 +246,7 @@ export function buildWorld(scene, renderer, quality) {
   }
 
   // ---- the floating 13 seal with the rose ----
-  const seal = new THREE.Group();
+  const seal = new THREE.Group(); const sealBase = new THREE.Color(0.35, 1.1, 2.6);
   const sealMat = new THREE.MeshBasicMaterial({ map: sealTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, color: new THREE.Color(0.35, 1.1, 2.6), fog: false });
   const sealMesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), sealMat); seal.add(sealMesh);
   const sealOuter = new THREE.Mesh(new THREE.PlaneGeometry(31, 31), runeMat.clone()); sealOuter.material.color = new THREE.Color(0.15, 0.55, 1.4); sealOuter.material.side = THREE.DoubleSide; seal.add(sealOuter);
@@ -216,6 +268,8 @@ export function buildWorld(scene, renderer, quality) {
   seal.add(rose);
   const roseLight = new THREE.PointLight(0xff2244, 25, 10, 1.5); roseLight.position.z = 3; seal.add(roseLight);
   seal.position.set(0, 12.5, -36); seal.scale.setScalar(0.85); seal.rotation.x = 0.12; scene.add(seal);
+  const orbiters = [];
+  for (let i = 0; i < 13; i++) { const o = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), glowCyan); o.scale.y = 1.8; seal.add(o); orbiters.push(o); }
   const sealLight = new THREE.PointLight(0x2a7cff, 25, 40, 1.6); sealLight.position.set(0, 10, -30); scene.add(sealLight);
 
   // ---- ambient sparks rising ----
@@ -226,13 +280,32 @@ export function buildWorld(scene, renderer, quality) {
   const sparks = new THREE.Points(sg, new THREE.PointsMaterial({ map: softDot('#5fd8ff'), size: 0.35, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.6, 1.4, 2.4) }));
   scene.add(sparks);
 
-  W.seal = seal; W.runes = runes;
+  W.seal = seal; W.runes = runes; W.floor = floor;
+  const crystalLights = []; scene.traverse(o => { if (o.isPointLight && o.color.getHex() === 0x3ab8ff) crystalLights.push(o); });
+  const sparkMat = sparks.material;
+  W.palette = 'azure';
+  W.setPalette = name => {
+    const P = PALETTES[name] || PALETTES.azure, c = skyFor(name); W.palette = name;
+    scene.background = c.sky; scene.environment = c.env; scene.fog.color.setHex(P.fog);
+    floorMat.map = c.tiles.map; floorMat.roughnessMap = c.tiles.rough; floorMat.needsUpdate = true;
+    glowBlue.color.setRGB(...P.glow); glowCyan.color.setRGB(...P.glow2); flameMat.color.setRGB(...P.glow);
+    runeMat.color.setRGB(...P.rune); runes2.material.color.setRGB(P.rune[0] * 2, P.rune[1] * 2, P.rune[2] * 2);
+    crystalMat.color.setHex(P.crystal); crystalMat.emissive.setHex(P.crystalE);
+    crystalLights.forEach(l => l.color.setHex(P.light)); sealLight.color.setHex(P.light);
+    sealBase.copy(new THREE.Color(...P.seal)); sparkMat.color.setRGB(...P.spark);
+    pMat.color.setRGB(P.planet[0] / 140, P.planet[1] / 70, P.planet[2] / 200);
+    bannerMat.emissive.setRGB(P.glow[0] * 0.06, P.glow[1] * 0.06, P.glow[2] * 0.06);
+    sealOuter.material.color.setRGB(P.rune[0] * 1.2, P.rune[1] * 1.2, P.rune[2] * 1.2);
+  };
   W.update = (dt, t) => {
     sealMesh.rotation.z += dt * 0.05; sealOuter.rotation.z -= dt * 0.03;
     seal.position.y = 12.5 + Math.sin(t * 0.6) * 0.4; rose.rotation.z += dt * 0.15;
     runes.rotation.z += dt * 0.015; runes2.rotation.z -= dt * 0.06;
-    sealMat.color.setRGB(0.35, 1.1 + Math.sin(t * 1.3) * 0.15, 2.6 + Math.sin(t * 1.3) * 0.3);
+    const pul = 1 + Math.sin(t * 1.3) * 0.12; sealMat.color.setRGB(sealBase.r * pul, sealBase.g * pul, sealBase.b * pul);
     planet.rotation.y += dt * 0.01;
+    orbiters.forEach((o, i) => { const a = t * 0.25 + i / 13 * Math.PI * 2; o.position.set(Math.cos(a) * 15, Math.sin(a) * 15, 0.5); o.rotation.y = t * 2 + i; });
+    flames.forEach((f, i) => { f.scale.set(1 + Math.sin(t * 9 + i) * 0.12, 1 + Math.sin(t * 13 + i * 2) * 0.2, 1 + Math.cos(t * 8 + i) * 0.12); });
+    banners.forEach((b, i) => { const p = b.geometry.attributes.position; for (let k = 0; k < p.count; k++) { const y = p.getY(k); p.setZ(k, Math.sin(t * 2 + y * 0.8 + i) * 0.15 * (2.5 - y) / 5); } p.needsUpdate = true; });
     for (const g of islands) { g.position.y = g.userData.by + Math.sin(t * g.userData.sp + g.userData.ph) * 0.8; }
     const p = sg.attributes.position.array;
     for (let i = 0; i < N; i++) { p[i * 3 + 1] += sv[i] * dt; p[i * 3] += Math.sin(t + i) * dt * 0.2; if (p[i * 3 + 1] > 25) p[i * 3 + 1] = 0; }

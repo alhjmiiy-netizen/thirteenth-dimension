@@ -1,188 +1,289 @@
 import * as THREE from 'three';
 import { coatEmissive, heroRing } from './textures.js';
 
-const BLUE = new THREE.Color(0.35, 1.5, 3.2);
+const PAL = {
+  hero: { glow: [0.35, 1.5, 3.2], soft: [0.25, 1.1, 2.4], eye: [1, 3, 4], mem: 0x0fb83a, memE: 0x0a9a2c, memEdge: 0x7dff9a, hair: 0x06070c, streak: 0x1a6cff, skin: 0xb88a78, sword: [0.6, 2.2, 4.0], coat: 0x0a0c14, light: 0x48c8ff },
+  shade: { glow: [3.0, 0.35, 0.25], soft: [2.2, 0.25, 0.2], eye: [4, 0.6, 0.4], mem: 0x6a0614, memE: 0x50000c, memEdge: 0xff5a5a, hair: 0x0c0204, streak: 0xff2a1a, skin: 0x5a4a52, sword: [4, 0.6, 0.4], coat: 0x100406, light: 0xff4a3a },
+};
 
-function wing(side, mats) {
-  // built in the XY plane, x = outward, y = up; then mirrored for the left side
+function wing(side, mats, P) {
   const g = new THREE.Group();
-  const W = new THREE.Vector2(1.5, 1.25);           // wrist
-  const tips = [new THREE.Vector2(3.6, 1.9), new THREE.Vector2(3.9, 0.3), new THREE.Vector2(3.3, -1.2), new THREE.Vector2(2.2, -2.1), new THREE.Vector2(0.9, -2.2)];
+  const W = new THREE.Vector2(1.55, 1.35);
+  const tips = [new THREE.Vector2(3.9, 2.3), new THREE.Vector2(4.3, 0.6), new THREE.Vector2(3.8, -1.1), new THREE.Vector2(2.7, -2.3), new THREE.Vector2(1.2, -2.6)];
   const shape = new THREE.Shape(); shape.moveTo(0, 0.15); shape.lineTo(W.x, W.y); shape.lineTo(tips[0].x, tips[0].y);
-  const edge = [new THREE.Vector3(0, 0.15, 0), new THREE.Vector3(W.x, W.y, 0), new THREE.Vector3(tips[0].x, tips[0].y, 0)];
+  const edge = [new THREE.Vector3(tips[0].x, tips[0].y, 0)];
   for (let i = 1; i < tips.length; i++) {
     const a = tips[i - 1], b = tips[i];
-    const mid = a.clone().add(b).multiplyScalar(0.5), dir = mid.clone().sub(W).multiplyScalar(0.72).add(W); // scallop pulls toward wrist
+    const mid = a.clone().add(b).multiplyScalar(0.5), dir = mid.clone().sub(W).multiplyScalar(0.74).add(W);
     shape.quadraticCurveTo(dir.x, dir.y, b.x, b.y);
-    for (let k = 1; k <= 4; k++) { const t = k / 4; const p = a.clone().multiplyScalar((1 - t) * (1 - t)).add(dir.clone().multiplyScalar(2 * t * (1 - t))).add(b.clone().multiplyScalar(t * t)); edge.push(new THREE.Vector3(p.x, p.y, 0)); }
+    for (let k = 1; k <= 5; k++) { const t = k / 5; const p = a.clone().multiplyScalar((1 - t) * (1 - t)).add(dir.clone().multiplyScalar(2 * t * (1 - t))).add(b.clone().multiplyScalar(t * t)); edge.push(new THREE.Vector3(p.x, p.y, 0)); }
   }
-  shape.lineTo(0.15, -0.6);
-  const mem = new THREE.Mesh(new THREE.ShapeGeometry(shape, 6), mats.membrane); g.add(mem);
-  // glowing blue trailing edge
-  const curve = new THREE.CatmullRomCurve3(edge);
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.02, 4, false), mats.edge));
-  // dark spiky bones
-  const bone = (a, b, r) => {
-    const len = a.distanceTo(b), m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.45, r, len, 6), mats.bone);
-    m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0.02); m.rotation.z = Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2; g.add(m);
+  shape.lineTo(0.2, -0.7);
+  const geo = new THREE.ShapeGeometry(shape, 8);
+  // vertex colours: deep green at the arm, bright toward the scalloped edge
+  const pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), cA = new THREE.Color(P.mem).multiplyScalar(0.35), cB = new THREE.Color(P.mem), cC = new THREE.Color(P.memEdge);
+  for (let i = 0; i < pos.count; i++) {
+    const d = Math.hypot(pos.getX(i) - W.x, pos.getY(i) - W.y) / 3.2;
+    const c = d < 0.6 ? cA.clone().lerp(cB, d / 0.6) : cB.clone().lerp(cC, Math.min(1, (d - 0.6) / 0.5) * 0.5);
+    cols.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  g.add(new THREE.Mesh(geo, mats.membrane));
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edge), 90, 0.022, 4, false), mats.edge));
+  const bone = (a, b, r, mat = mats.bone) => {
+    const len = a.distanceTo(b), m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.4, r, len, 6), mat);
+    m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0.025); m.rotation.z = Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2; g.add(m);
   };
-  bone(new THREE.Vector2(0, 0.1), W, 0.11);
-  tips.forEach(t => bone(W, t, 0.06));
-  const spikeGeo = new THREE.ConeGeometry(0.07, 0.6, 5);
-  const addSpike = (p, ang, s = 1) => { const sp = new THREE.Mesh(spikeGeo, mats.bone); sp.position.set(p.x, p.y, 0.02); sp.rotation.z = ang; sp.scale.setScalar(s); g.add(sp); };
-  addSpike(new THREE.Vector2(W.x + 0.1, W.y + 0.3), -0.2, 1.4); addSpike(new THREE.Vector2(0.75, 0.95), 0.3, 1);
-  tips.forEach(t => { const d = t.clone().sub(W).normalize(); addSpike(t.clone().add(d.clone().multiplyScalar(0.25)), Math.atan2(d.y, d.x) - Math.PI / 2, 0.9); });
-  const claw = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 5), mats.edge); claw.position.set(W.x, W.y + 0.25, 0.04); g.add(claw);
+  bone(new THREE.Vector2(0, 0.1), W, 0.12);
+  tips.forEach(t => bone(W, t, 0.065));
+  // veins
+  tips.forEach((t, i) => { if (i) { const mid = tips[i - 1].clone().add(t).multiplyScalar(0.5).sub(W).multiplyScalar(0.7).add(W); bone(W, mid, 0.018, mats.vein); } });
+  const spikeGeo = new THREE.ConeGeometry(0.075, 0.6, 5);
+  const addSpike = (p, ang, s = 1, mat = mats.bone) => { const sp = new THREE.Mesh(spikeGeo, mat); sp.position.set(p.x, p.y, 0.03); sp.rotation.z = ang; sp.scale.setScalar(s); g.add(sp); };
+  addSpike(new THREE.Vector2(W.x + 0.1, W.y + 0.35), -0.25, 1.6); addSpike(new THREE.Vector2(0.8, 1.0), 0.35, 1.1); addSpike(new THREE.Vector2(1.15, 1.2), 0.1, 0.9);
+  tips.forEach(t => { const d = t.clone().sub(W).normalize(); addSpike(t.clone().add(d.clone().multiplyScalar(0.25)), Math.atan2(d.y, d.x) - Math.PI / 2, 1.0); });
+  addSpike(new THREE.Vector2(W.x, W.y + 0.25), 0, 0.8, mats.edge);
   if (side < 0) g.scale.x = -1;
   return g;
 }
 
-export function buildHero(scene) {
+export function buildHero(scene, opts = {}) {
+  const P = PAL[opts.palette || 'hero'];
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
+  const GL = new THREE.Color(...P.glow);
   const em = coatEmissive();
-  const coatMat = new THREE.MeshStandardMaterial({ color: 0x0a0c14, roughness: 0.45, metalness: 0.5, emissive: new THREE.Color(0.25, 1.1, 2.4), emissiveMap: em, emissiveIntensity: 0.55, side: THREE.DoubleSide });
-  const skirtMat = coatMat.clone(); skirtMat.emissiveMap = coatEmissive(false); skirtMat.emissiveIntensity = 0.35;
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x07080d, roughness: 0.5, metalness: 0.4 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xb88a78, roughness: 0.7 });
-  const hairMat = new THREE.MeshStandardMaterial({ color: 0x06070c, roughness: 0.4, metalness: 0.3 });
-  const hairBlue = new THREE.MeshStandardMaterial({ color: 0x0a2a6a, emissive: 0x1a6cff, emissiveIntensity: 1.6, roughness: 0.4 });
-  const glow = new THREE.MeshBasicMaterial({ color: BLUE });
+  const coatMat = new THREE.MeshStandardMaterial({ color: P.coat, roughness: 0.45, metalness: 0.5, emissive: new THREE.Color(...P.soft), emissiveMap: em, emissiveIntensity: 0.55, side: THREE.DoubleSide });
+  const skirtMat = coatMat.clone(); skirtMat.emissiveMap = coatEmissive(false); skirtMat.emissiveIntensity = 0.32;
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x07080d, roughness: 0.5, metalness: 0.45 });
+  const leatherMat = new THREE.MeshStandardMaterial({ color: 0x14151c, roughness: 0.35, metalness: 0.6 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: P.skin, roughness: 0.7 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: P.hair, roughness: 0.35, metalness: 0.35 });
+  const hairBlue = new THREE.MeshStandardMaterial({ color: 0x0a1a3a, emissive: P.streak, emissiveIntensity: 1.4, roughness: 0.4 });
+  const glow = new THREE.MeshBasicMaterial({ color: GL });
   const mats = {
-    membrane: new THREE.MeshStandardMaterial({ color: 0x0fb83a, emissive: 0x0a9a2c, emissiveIntensity: 0.5, roughness: 0.55, transparent: true, opacity: 0.94, side: THREE.DoubleSide }),
-    edge: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.15, 0.8, 2.0) }), bone: new THREE.MeshStandardMaterial({ color: 0x050609, roughness: 0.4, metalness: 0.5, envMapIntensity: 0.3 })
+    membrane: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, emissive: P.memE, emissiveIntensity: 0.35, roughness: 0.55, transparent: true, opacity: 0.94, side: THREE.DoubleSide }),
+    edge: new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.soft).multiplyScalar(0.8) }),
+    bone: new THREE.MeshStandardMaterial({ color: 0x050609, roughness: 0.4, metalness: 0.5, envMapIntensity: 0.3 }),
+    vein: new THREE.MeshStandardMaterial({ color: 0x031208, roughness: 0.6, transparent: true, opacity: 0.6 }),
   };
+  const M = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
 
-  // legs
+  // ---- legs (hip -> knee) ----
   const legs = [];
   for (const s of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(s * 0.13, 0.95, 0);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.075, 0.9, 8), darkMat); leg.position.y = -0.45; hip.add(leg);
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.3), darkMat); boot.position.set(0, -0.88, 0.05); hip.add(boot);
-    const bglow = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.02, 0.31), glow); bglow.position.set(0, -0.82, 0.05); hip.add(bglow);
-    body.add(hip); legs.push(hip);
+    const hip = new THREE.Group(); hip.position.set(s * 0.15, 1.12, 0);
+    M(new THREE.CylinderGeometry(0.1, 0.085, 0.55, 8), darkMat, hip, 0, -0.27, 0);
+    const knee = new THREE.Group(); knee.position.y = -0.55; hip.add(knee);
+    M(new THREE.CylinderGeometry(0.085, 0.075, 0.5, 8), darkMat, knee, 0, -0.25, 0);
+    const boot = M(new THREE.BoxGeometry(0.17, 0.3, 0.2), leatherMat, knee, 0, -0.42, 0.02);
+    M(new THREE.BoxGeometry(0.16, 0.1, 0.32), leatherMat, knee, 0, -0.52, 0.07);
+    M(new THREE.BoxGeometry(0.18, 0.025, 0.21), glow, knee, 0, -0.29, 0.02);
+    body.add(hip); legs.push({ hip, knee });
   }
-  // long coat (skirt split into flaps that swing)
+  // ---- torso ----
+  const torso = new THREE.Group(); torso.position.y = 1.2; body.add(torso);
+  const chestPts = [[0.22, 0], [0.26, 0.12], [0.29, 0.35], [0.31, 0.55], [0.24, 0.72], [0.12, 0.78]].map(p => new THREE.Vector2(...p));
+  M(new THREE.LatheGeometry(chestPts, 16), coatMat, torso);
+  // mantle over shoulders
+  const mantle = M(new THREE.CylinderGeometry(0.3, 0.42, 0.28, 16, 1, true, 0, Math.PI * 2), coatMat, torso, 0, 0.62, -0.01); mantle.scale.z = 0.8;
+  M(new THREE.TorusGeometry(0.42, 0.018, 6, 24), glow, torso, 0, 0.48, 0).rotation.x = Math.PI / 2;
+  // high collar
+  const collar = M(new THREE.CylinderGeometry(0.17, 0.22, 0.3, 14, 1, true, Math.PI * 0.2, Math.PI * 1.6), coatMat, torso, 0, 0.88, -0.02);
+  M(new THREE.TorusGeometry(0.17, 0.012, 6, 18, Math.PI * 1.6), glow, torso, 0, 1.03, -0.02).rotation.set(Math.PI / 2, 0, Math.PI * 0.7);
+  // lapels + chest glow seams
+  for (const s of [-1, 1]) {
+    const lap = M(new THREE.BoxGeometry(0.1, 0.55, 0.03), leatherMat, torso, s * 0.09, 0.42, 0.27); lap.rotation.z = s * 0.25; lap.rotation.x = -0.1;
+    M(new THREE.BoxGeometry(0.012, 0.55, 0.035), glow, torso, s * 0.14, 0.42, 0.275).rotation.z = s * 0.25;
+  }
+  // belt + 13 buckle
+  M(new THREE.TorusGeometry(0.235, 0.035, 6, 20), leatherMat, torso, 0, 0.06, 0).rotation.x = Math.PI / 2;
+  const buckle = M(new THREE.OctahedronGeometry(0.06), glow, torso, 0, 0.06, 0.24); buckle.scale.set(1, 1.3, 0.4);
+  // coat tails: 6 flaps hanging from the waist
   const flaps = [];
-  for (let i = 0; i < 4; i++) {
-    const f = new THREE.Group(); f.position.y = 1.3; f.rotation.y = i * Math.PI / 2;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.52, 1.15, 8, 1, true, -Math.PI / 4 + 0.03, Math.PI / 2 - 0.06), skirtMat); m.position.y = -0.57; f.add(m);
-    body.add(f); flaps.push(f);
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    if (i === 0) continue; // open in front
+    const f = new THREE.Group(); f.position.y = 1.25; f.rotation.y = a;
+    const len = i === 3 ? 1.25 : (i === 2 || i === 4 ? 1.15 : 1.0);
+    M(new THREE.CylinderGeometry(0.25, 0.48, len, 6, 1, true, -Math.PI / 6 - 0.02, Math.PI / 3 + 0.04), skirtMat, f, 0, -len / 2, 0);
+    // hem glow
+    const hem = M(new THREE.TorusGeometry(0.48, 0.012, 4, 8, Math.PI / 3), glow, f, 0, -len + 0.01, 0); hem.rotation.set(Math.PI / 2, 0, Math.PI / 2 - Math.PI / 6);
+    body.add(f); flaps.push({ f, i, v: 0, a: 0 });
   }
-  // fix emblem: back flap is the one that covers -Z (rotation.y = PI)
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.62, 16, 1), coatMat); torso.position.y = 1.6; body.add(torso);
-  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 6, 20), glow); belt.rotation.x = Math.PI / 2; belt.position.y = 1.32; body.add(belt);
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.28, 12, 1, true, Math.PI * 0.15, Math.PI * 1.7), coatMat); collar.position.y = 2.0; collar.rotation.y = 0; body.add(collar);
-  // arms
+  // ---- arms ----
   const arms = [];
   for (const s of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(s * 0.33, 1.84, 0);
-    const pad = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), coatMat); pad.scale.set(1.15, 0.85, 1.1); sh.add(pad);
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.07, 0.42, 8), coatMat); upper.position.y = -0.24; sh.add(upper);
-    const elbow = new THREE.Group(); elbow.position.y = -0.45; sh.add(elbow);
-    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 0.4, 8), coatMat); fore.position.y = -0.2; elbow.add(fore);
-    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.018, 6, 14), glow); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.38; elbow.add(cuff);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 2.2, 3.5) })); hand.position.y = -0.46; elbow.add(hand);
-    body.add(sh); arms.push({ sh, elbow, hand });
+    const sh = new THREE.Group(); sh.position.set(s * 0.36, 0.62, 0); torso.add(sh);
+    const pad = M(new THREE.SphereGeometry(0.15, 12, 8), coatMat, sh); pad.scale.set(1.2, 0.8, 1.15);
+    M(new THREE.ConeGeometry(0.035, 0.22, 5), mats.bone, sh, s * 0.12, 0.08, 0).rotation.z = -s * 1.0;
+    M(new THREE.CylinderGeometry(0.08, 0.075, 0.42, 8), coatMat, sh, 0, -0.24, 0);
+    const el = new THREE.Group(); el.position.y = -0.45; sh.add(el);
+    M(new THREE.CylinderGeometry(0.075, 0.09, 0.38, 8), coatMat, el, 0, -0.19, 0);
+    M(new THREE.TorusGeometry(0.09, 0.016, 6, 14), glow, el, 0, -0.36, 0).rotation.x = Math.PI / 2;
+    const hand = new THREE.Group(); hand.position.y = -0.44; el.add(hand);
+    M(new THREE.BoxGeometry(0.1, 0.12, 0.12), leatherMat, hand);
+    M(new THREE.BoxGeometry(0.105, 0.02, 0.05), glow, hand, 0, -0.03, 0.05);
+    arms.push({ sh, el, hand, s });
   }
-  // head
-  const head = new THREE.Group(); head.position.y = 2.17; body.add(head);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.15, 8), skinMat); neck.position.y = -0.12; head.add(neck);
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), skinMat); skull.scale.set(0.92, 1.05, 0.98); skull.position.y = 0.05; head.add(skull);
+  // spectral sword in the right hand
+  const sword = new THREE.Group(); arms[1].hand.add(sword); sword.position.set(0, -0.04, 0); sword.rotation.x = Math.PI / 2;
+  M(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 6), leatherMat, sword, 0, 0, 0);
+  M(new THREE.BoxGeometry(0.34, 0.04, 0.06), mats.bone, sword, 0, 0.12, 0);
+  const bladeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.sword), transparent: true, opacity: 1 });
+  const blade = M(new THREE.CylinderGeometry(0.012, 0.06, 1.35, 4), bladeMat, sword, 0, 0.82, 0); blade.scale.z = 0.35;
+  const sheathMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.sword).multiplyScalar(0.25), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sheath = M(new THREE.CylinderGeometry(0.03, 0.12, 1.45, 4), sheathMat, sword, 0, 0.82, 0); sheath.scale.z = 0.5;
+  // ---- head ----
+  const head = new THREE.Group(); head.position.y = 0.98; torso.add(head);
+  M(new THREE.CylinderGeometry(0.065, 0.075, 0.16, 8), skinMat, head, 0, -0.1, 0);
+  const skull = M(new THREE.SphereGeometry(0.16, 18, 14), skinMat, head, 0, 0.06, 0); skull.scale.set(0.9, 1.04, 0.98);
+  const jaw = M(new THREE.SphereGeometry(0.12, 12, 8), skinMat, head, 0, -0.02, 0.03); jaw.scale.set(0.85, 0.75, 0.95);
+  M(new THREE.ConeGeometry(0.018, 0.05, 4), skinMat, head, 0, 0.03, 0.155).rotation.x = Math.PI / 2;
+  M(new THREE.BoxGeometry(0.05, 0.008, 0.01), new THREE.MeshBasicMaterial({ color: 0x2a1010 }), head, 0, -0.035, 0.135);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.eye) });
   for (const s of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 3, 4) })); eye.position.set(s * 0.055, 0.06, 0.145); eye.scale.set(1.4, 0.7, 0.5); head.add(eye);
-    const mark = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.01), glow); mark.position.set(s * 0.08, -0.02, 0.135); mark.rotation.z = s * 0.3; head.add(mark);
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.17, 4), skinMat); ear.position.set(s * 0.155, 0.06, -0.01); ear.rotation.z = -s * 1.2; ear.rotation.y = s * 0.3; head.add(ear);
-    // curved horn: 3 stacked cones
-    const horn = new THREE.Group(); horn.position.set(s * 0.09, 0.17, -0.02); horn.rotation.set(-0.5, 0, -s * 0.35); head.add(horn);
-    let parent = horn, r = 0.045;
-    for (let k = 0; k < 3; k++) { const seg = new THREE.Group(); const c = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r, 0.13, 6), hairMat); c.position.y = 0.065; seg.add(c); seg.position.y = k ? 0.13 : 0; seg.rotation.x = k ? -0.45 : 0; parent.add(seg); parent = seg; r *= 0.7; }
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(r, 0.12, 6), hairMat); tip.position.y = 0.19; parent.add(tip);
+    const eye = M(new THREE.SphereGeometry(0.026, 8, 6), eyeMat, head, s * 0.055, 0.07, 0.14); eye.scale.set(1.5, 0.65, 0.5); eye.rotation.z = s * 0.15;
+    M(new THREE.BoxGeometry(0.07, 0.014, 0.014), hairMat, head, s * 0.058, 0.11, 0.142).rotation.z = -s * 0.28;
+    M(new THREE.BoxGeometry(0.01, 0.07, 0.01), glow, head, s * 0.085, 0.0, 0.13).rotation.z = s * 0.35;
+    M(new THREE.BoxGeometry(0.008, 0.04, 0.01), glow, head, s * 0.065, -0.01, 0.138).rotation.z = s * 0.2;
+    const ear = M(new THREE.ConeGeometry(0.035, 0.2, 4), skinMat, head, s * 0.155, 0.07, -0.01); ear.rotation.z = -s * 1.25; ear.rotation.y = s * 0.35;
+    // curved ridged horn
+    const horn = new THREE.Group(); horn.position.set(s * 0.085, 0.18, 0.0); horn.rotation.set(-0.35, 0, -s * 0.45); head.add(horn);
+    let parent = horn, r = 0.05;
+    for (let k = 0; k < 5; k++) {
+      const seg = new THREE.Group(); M(new THREE.CylinderGeometry(r * 0.78, r, 0.1, 7), hairMat, seg, 0, 0.05, 0);
+      M(new THREE.TorusGeometry(r * 0.95, r * 0.15, 4, 10), mats.bone, seg, 0, 0.01, 0).rotation.x = Math.PI / 2;
+      seg.position.y = k ? 0.1 : 0; seg.rotation.x = k ? -0.38 : 0; seg.rotation.z = k ? -s * 0.08 : 0; parent.add(seg); parent = seg; r *= 0.78;
+    }
+    M(new THREE.ConeGeometry(r, 0.14, 6), hairMat, parent, 0, 0.17, 0);
   }
-  // spiky hair
-  const spike = new THREE.ConeGeometry(0.06, 0.32, 5);
-  const dirs = [];
-  for (let i = 0; i < 26; i++) {
-    const th = (i / 26) * Math.PI * 2, up = 0.25 + (i % 3) * 0.25;
-    dirs.push([Math.sin(th) * (1 - up * 0.5), up + 0.25, Math.cos(th) * (1 - up * 0.5) - 0.35]);
-  }
-  dirs.push([0, 1, -0.3], [0.3, 0.9, 0.2], [-0.3, 0.9, 0.2], [0, 0.6, 0.9], [0.25, 0.4, 0.9], [-0.25, 0.4, 0.9]);
-  dirs.forEach((d, i) => {
-    const v = new THREE.Vector3(...d).normalize();
-    const m = new THREE.Mesh(spike, i % 5 === 0 ? hairBlue : hairMat);
-    m.position.copy(v).multiplyScalar(0.14).add(new THREE.Vector3(0, 0.09, 0));
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().add(new THREE.Vector3(0, 0.25, -0.35)).normalize());
-    m.scale.set(1, 0.8 + (i * 37 % 10) / 15, 1);
-    head.add(m);
-  });
-  // wings
-  const wingRoot = new THREE.Group(); wingRoot.position.set(0, 1.8, -0.2); body.add(wingRoot);
+  M(new THREE.BoxGeometry(0.012, 0.05, 0.01), glow, head, 0, 0.15, 0.145);
+  // spiky hair: cap, crown spikes, back spikes, bangs
+  const cap = M(new THREE.SphereGeometry(0.172, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat, head, 0, 0.075, -0.01); cap.scale.set(0.95, 1.05, 1.02);
+  const spike = new THREE.ConeGeometry(0.055, 0.34, 5);
+  const add = (dir, len, mat, off = 0.13) => {
+    const v = new THREE.Vector3(...dir).normalize();
+    const m = new THREE.Mesh(spike, mat); m.position.copy(v).multiplyScalar(off).add(new THREE.Vector3(0, 0.1, -0.01));
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v); m.scale.set(1, len, 1); head.add(m);
+  };
+  for (let i = 0; i < 22; i++) { const th = i / 22 * Math.PI * 2, up = 0.35 + (i % 3) * 0.22; add([Math.sin(th) * 0.9, up + 0.2, Math.cos(th) * 0.9 - 0.45], 0.9 + (i * 37 % 10) / 14, i % 6 === 0 ? hairBlue : hairMat); }
+  for (let i = 0; i < 9; i++) { const th = (i / 8 - 0.5) * 2.2; add([Math.sin(th), 0.15 - Math.abs(th) * 0.05, -1], 1.2 + (i % 2) * 0.3, i % 4 === 1 ? hairBlue : hairMat); }
+  [[0, 1, 0.1], [0.35, 1, -0.1], [-0.35, 1, -0.1], [0.15, 1.1, -0.4], [-0.15, 1.1, -0.4]].forEach((d, i) => add(d, 1.25, i === 1 ? hairBlue : hairMat));
+  for (let i = 0; i < 6; i++) { const x = (i / 5 - 0.5) * 0.24; const m = new THREE.Mesh(spike, i === 2 ? hairBlue : hairMat); m.position.set(x, 0.16, 0.12); m.rotation.set(Math.PI * 0.82, 0, -x * 2.5); m.scale.set(0.8, 0.6 + (i % 2) * 0.2, 0.8); head.add(m); }
+  // ---- wings ----
+  const wingRoot = new THREE.Group(); wingRoot.position.set(0, 0.55, -0.22); torso.add(wingRoot);
   const wings = [];
   for (const s of [-1, 1]) {
-    const piv = new THREE.Group(); piv.position.x = s * 0.22; wingRoot.add(piv);
-    const w = wing(s, mats); w.scale.multiplyScalar(0.62); if (s < 0) w.scale.x = -0.62; piv.add(w); wings.push({ piv, s });
+    const piv = new THREE.Group(); piv.position.x = s * 0.12; wingRoot.add(piv);
+    const w = wing(s, mats, P); w.scale.set(s * 0.72, 0.72, 0.72); piv.add(w); wings.push({ piv, s });
   }
-  // glow ring under feet
-  const ringMat = new THREE.MeshBasicMaterial({ map: heroRing(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.3, 1.0, 2.0) });
-  const ring = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; root.add(ring);
-  const light = new THREE.PointLight(0x48c8ff, 4, 8, 2); light.position.set(0, 2.8, 0); root.add(light);
-
-  // crackling lightning around the hero
+  // ---- ground ring + light + crackling lightning ----
+  const ringMat = new THREE.MeshBasicMaterial({ map: heroRing(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(...P.soft).multiplyScalar(0.8) });
+  const ring = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; root.add(ring);
+  const light = opts.noLight ? null : new THREE.PointLight(P.light, 4, 8, 2); if (light) { light.position.set(0, 2.8, 0); root.add(light); }
   const bolts = [];
-  const boltMat = new THREE.LineBasicMaterial({ color: new THREE.Color(1.2, 2.6, 4), transparent: true });
+  const boltMat = new THREE.LineBasicMaterial({ color: new THREE.Color(...P.glow).multiplyScalar(1.1), transparent: true });
   for (let i = 0; i < 4; i++) {
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(10 * 3), 3));
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(30), 3));
     const l = new THREE.Line(geo, boltMat); l.frustumCulled = false; root.add(l); bolts.push({ l, t: 0 });
   }
   function regen(b) {
     const p = b.l.geometry.attributes.position.array;
-    const a0 = Math.random() * 6.28, r0 = 0.5 + Math.random() * 0.6, y0 = 0.3 + Math.random() * 2;
+    const a0 = Math.random() * 6.28, r0 = 0.5 + Math.random() * 0.6, y0 = 0.3 + Math.random() * 2.2;
     let x = Math.sin(a0) * r0, y = y0, z = Math.cos(a0) * r0;
     const dx = (Math.random() - .5) * 0.25, dy = (Math.random() - .3) * 0.25, dz = (Math.random() - .5) * 0.25;
     for (let i = 0; i < 10; i++) { p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z; x += dx + (Math.random() - .5) * 0.18; y += dy + (Math.random() - .5) * 0.18; z += dz + (Math.random() - .5) * 0.18; }
-    b.l.geometry.attributes.position.needsUpdate = true; b.t = 0.05 + Math.random() * 0.1;
-    b.l.visible = Math.random() < 0.6;
+    b.l.geometry.attributes.position.needsUpdate = true; b.t = 0.05 + Math.random() * 0.1; b.l.visible = Math.random() < 0.55;
   }
-  root.position.set(0, 0, 8); root.rotation.y = Math.PI; body.scale.setScalar(1.18);
   scene.add(root);
 
-  let t = 0;
+  // ---- animation ----
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const ease = k => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  // attack keyframes [windup, strike] for the right arm: sh x,y,z, el x, torso y
+  const ATK = [
+    { a: [-2.5, 0.2, 0.9, -1.2, 0.6], b: [-0.6, -0.9, -0.6, -0.15, -0.7] },
+    { a: [-1.4, -1.2, -0.9, -0.3, -0.8], b: [-1.5, 0.9, 1.3, -0.1, 0.8] },
+    { a: [-1.6, 0, 1.45, 0, 0], b: [-1.6, 0, 1.45, 0, 0] },
+  ];
+  let t = 0, swordA = 0;
   const H = {
-    root, ring, light, wings,
+    root, ring, light, wings, body, torso, head, sword, P,
     update(dt, st) {
       t += dt;
       const run = st.moveAmt || 0, ph = t * 11;
-      const atk = st.atk; // {p:0..1, side}
-      body.position.y = Math.sin(t * 2.2) * 0.03 * (1 - run) + Math.abs(Math.sin(ph)) * 0.08 * run + (st.dash ? 0.25 : 0);
-      body.rotation.x = run * 0.22 + (st.dash ? 0.4 : 0);
-      legs[0].rotation.x = Math.sin(ph) * 0.8 * run; legs[1].rotation.x = -Math.sin(ph) * 0.8 * run;
-      flaps.forEach((f, i) => { const back = i === 2; f.rotation.x = back ? -(run * 0.5 + Math.sin(ph * 0.5 + i) * 0.08 * run + 0.04) : (i === 0 ? Math.sin(ph) * 0.12 * run : 0); f.rotation.z = (i === 1 ? -1 : i === 3 ? 1 : 0) * (Math.sin(t * 2 + i) * 0.04 + run * 0.12); });
-      // arms
+      // reset base pose
+      body.position.set(0, Math.sin(t * 2.2) * 0.025 * (1 - run) + Math.abs(Math.sin(ph)) * 0.08 * run, 0);
+      body.rotation.set(run * 0.18, 0, 0);
+      torso.rotation.set(0, Math.sin(ph) * 0.12 * run, 0);
+      head.rotation.set(-run * 0.12, 0, 0);
       for (let i = 0; i < 2; i++) {
-        const a = arms[i], s = i ? 1 : -1;
-        a.sh.rotation.x = -Math.sin(ph) * 0.7 * run * s + Math.sin(t * 2) * 0.04;
-        a.sh.rotation.z = s * (0.12 + Math.sin(t * 2.2) * 0.03);
-        a.elbow.rotation.x = -0.3 - run * 0.5;
+        const L = legs[i], s = i ? -1 : 1;
+        L.hip.rotation.set(Math.sin(ph) * 0.85 * run * s, 0, 0);
+        L.knee.rotation.x = Math.max(0, -Math.sin(ph + (i ? Math.PI : 0) - 0.6)) * 1.1 * run;
       }
-      if (atk) {
-        const p = atk.p, k = Math.sin(Math.min(1, p * 1.3) * Math.PI);
-        const a = arms[atk.side > 0 ? 1 : 0], s = atk.side > 0 ? 1 : -1;
-        a.sh.rotation.x = -1.4 * k - 0.2; a.sh.rotation.z = s * (0.3 + 1.0 * (1 - p)) ; a.sh.rotation.y = -s * (1.6 * p - 0.8);
-        a.elbow.rotation.x = -0.2;
-        body.rotation.y = -s * (p - 0.5) * 0.9;
-      } else { arms[0].sh.rotation.y = arms[1].sh.rotation.y = 0; body.rotation.y *= 0.8; }
-      if (st.cast) { for (const a of arms) { a.sh.rotation.x = -2.6 * st.cast; } }
-      // wings: slow powerful flap idle, swept back while running, flared on dash/attack
-      const flap = Math.sin(t * (2.2 + run * 2.5));
-      const flare = st.dash ? 1 : (atk ? 0.4 : 0);
+      for (const a of arms) {
+        a.sh.rotation.set(-Math.sin(ph) * 0.6 * run * a.s + Math.sin(t * 2) * 0.04, 0, a.s * (0.12 + Math.sin(t * 2.2) * 0.03));
+        a.el.rotation.x = -0.25 - run * 0.6;
+      }
+      let flare = 0, wingFold = 0, swordWant = st.combat ? 1 : 0;
+      if (st.atkIdx >= 0) {
+        swordWant = 1;
+        const K = ATK[st.atkIdx], p = st.atkP, R = arms[1];
+        let v;
+        if (p < 0.35) v = K.a.map((x, j) => x * ease(p / 0.35));
+        else { const k = ease(Math.min(1, (p - 0.35) / 0.3)); v = K.a.map((x, j) => lerp(x, K.b[j], k)); }
+        R.sh.rotation.set(v[0], v[1], v[2]); R.el.rotation.x = v[3]; torso.rotation.y = v[4];
+        arms[0].sh.rotation.set(-0.5, 0, -0.5); arms[0].el.rotation.x = -1.0;
+        body.rotation.x = 0.12;
+        if (st.atkIdx === 2) { const k = Math.min(1, Math.max(0, (p - 0.2) / 0.6)); body.rotation.y = -ease(k) * Math.PI * 2; body.position.y += Math.sin(Math.min(1, p) * Math.PI) * 0.5; flare = 0.6; }
+        else flare = 0.25;
+        legs[0].hip.rotation.x = -0.35; legs[1].hip.rotation.x = 0.3; legs[1].knee.rotation.x = 0.3;
+      } else body.rotation.y = 0;
+      if (st.cast > 0) {
+        const c = st.cast;
+        for (const a of arms) { a.sh.rotation.set(-2.7 * c, 0, a.s * 0.35 * c); a.el.rotation.x = -0.2; }
+        head.rotation.x = -0.3 * c; flare = Math.max(flare, c);
+      }
+      if (st.dash) {
+        body.rotation.x = 0.55; body.position.y += 0.15;
+        for (const a of arms) { a.sh.rotation.set(0.9, 0, a.s * 0.4); a.el.rotation.x = -0.3; }
+        legs[0].hip.rotation.x = 0.6; legs[1].hip.rotation.x = 0.9; legs[0].knee.rotation.x = 0.9; legs[1].knee.rotation.x = 1.2;
+        wingFold = 1;
+      }
+      if (st.hitT > 0) { const k = st.hitT / 0.3; body.rotation.x -= 0.45 * k; head.rotation.x -= 0.4 * k; for (const a of arms) a.sh.rotation.z += a.s * 0.5 * k; }
+      if (st.victory) {
+        const R = arms[1]; R.sh.rotation.set(-2.9, 0, 0.25); R.el.rotation.x = -0.1; arms[0].sh.rotation.set(-0.3, 0, -0.6);
+        head.rotation.x = -0.25; flare = -0.35; swordWant = 1;
+      }
+      let dead = 0;
+      if (st.deadT >= 0) {
+        dead = Math.min(1, st.deadT / 0.6); const d2 = Math.min(1, Math.max(0, (st.deadT - 0.7) / 0.6));
+        legs.forEach(L => { L.hip.rotation.x = -1.4 * dead; L.knee.rotation.x = 2.2 * dead; });
+        body.position.y = -0.55 * dead; body.rotation.x = 0.5 * dead + 1.0 * d2; body.rotation.z = 0.5 * d2;
+        for (const a of arms) { a.sh.rotation.set(0.2, 0, a.s * 0.25); a.el.rotation.x = -0.1; }
+        head.rotation.x = 0.6 * dead; swordWant = 0;
+      }
+      // coat tail spring physics
+      for (const fl of flaps) {
+        const back = fl.i === 3 ? 1 : (fl.i === 2 || fl.i === 4) ? 0.7 : 0.3;
+        const target = -(run * 0.55 * back + (st.dash ? 0.9 * back : 0)) - Math.sin(t * 1.7 + fl.i) * 0.03 + (st.atkIdx === 2 ? -0.8 : 0) + (dead ? 0.3 : 0);
+        fl.v += ((target - fl.a) * 60 - fl.v * 9) * dt; fl.a += fl.v * dt; fl.f.rotation.x = fl.a;
+      }
+      // wings: slow powerful flap; swept back while running/dashing; flared on attacks/casts
+      const flap = Math.sin(t * (2.0 + run * 2.6));
       for (const w of wings) {
-        w.piv.rotation.y = w.s * (0.6 + run * 0.45 - flare * 0.3 + flap * 0.16);
-        w.piv.rotation.z = w.s * (0.05 + flap * 0.18 + flare * 0.15);
-        w.piv.rotation.x = 0.15 + run * 0.2;
+        w.piv.rotation.y = w.s * ((st.showcase ? 0.38 : 0.92) + run * 0.3 + wingFold * 0.6 - flare * 0.45 + flap * 0.14) + (dead ? w.s * 0.8 : 0);
+        w.piv.rotation.z = w.s * (0.02 + flap * 0.17 + flare * 0.2) - (dead ? w.s * 0.5 : 0);
+        w.piv.rotation.x = 0.12 + run * 0.2 + wingFold * 0.25;
       }
-      ring.rotation.z += dt * 0.6;
-      light.intensity = 4 + Math.sin(t * 13) * 1 + (atk ? 5 : 0);
-      for (const b of bolts) { b.t -= dt; if (b.t <= 0) regen(b); }
+      // sword fade
+      swordA += ((swordWant ? 1 : 0) - swordA) * Math.min(1, dt * (swordWant ? 14 : 2.5));
+      sword.visible = swordA > 0.02; sword.scale.set(1, Math.max(0.01, swordA), 1); bladeMat.opacity = swordA;
+      ring.rotation.z += dt * 0.6; ring.visible = st.deadT < 0;
+      if (light) light.intensity = 4 + Math.sin(t * 13) * 1 + (st.atkIdx >= 0 ? 5 : 0);
+      for (const b of bolts) { b.t -= dt; if (b.t <= 0) regen(b); if (st.deadT >= 0) b.l.visible = false; }
     }
   };
   return H;

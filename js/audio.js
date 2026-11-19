@@ -1,7 +1,6 @@
 // Synthesized, heavy cinematic SFX (no samples). Every sound layers a sub boom,
 // a noise body and distortion through a shared reverb + compressor.
-let ctx = null, master, comp, verb, verbGain, dry, musicGain, noiseBuf, enabled = true;
-let music = null;
+let ctx = null, master, comp, verb, verbGain, dry, musicGain, noiseBuf;
 
 function makeDist(k) {
   const n = 2048, c = new Float32Array(n);
@@ -16,25 +15,35 @@ function impulse(sec, decay) {
   }
   return b;
 }
+let sfxBus, vol = { master: 0.9, music: 0.6, sfx: 0.9 };
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
   comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.25;
-  master = ctx.createGain(); master.gain.value = enabled ? 0.9 : 0;
+  comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 5; comp.attack.value = 0.003; comp.release.value = 0.25;
+  master = ctx.createGain(); master.gain.value = vol.master;
   comp.connect(master); master.connect(ctx.destination);
-  dry = ctx.createGain(); dry.gain.value = 1; dry.connect(comp);
+  sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(comp);
+  dry = ctx.createGain(); dry.gain.value = 1; dry.connect(sfxBus);
   verb = ctx.createConvolver(); verb.buffer = impulse(2.8, 2.6);
   verbGain = ctx.createGain(); verbGain.gain.value = 0.38;
-  verb.connect(verbGain); verbGain.connect(comp);
-  musicGain = ctx.createGain(); musicGain.gain.value = 0.32; musicGain.connect(comp);
+  verb.connect(verbGain); verbGain.connect(sfxBus);
+  musicGain = ctx.createGain(); musicGain.gain.value = vol.music * 0.5; musicGain.connect(comp);
   const len = ctx.sampleRate * 2; noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  initMusic();
+  if (pendingTrack) playMusic(pendingTrack);
 }
-export function setSound(on) { enabled = on; if (master) master.gain.setTargetAtTime(on ? 0.9 : 0, ctx.currentTime, 0.05); }
-export function soundOn() { return enabled; }
+export function setVolumes(v) {
+  Object.assign(vol, v);
+  if (!ctx) return;
+  master.gain.setTargetAtTime(vol.master, ctx.currentTime, 0.05);
+  sfxBus.gain.setTargetAtTime(vol.sfx, ctx.currentTime, 0.05);
+  musicGain.gain.setTargetAtTime(vol.music * 0.5, ctx.currentTime, 0.05);
+}
+export function audioReady() { return !!ctx; }
 
 function out(node, wet = 0.4) {
   node.connect(dry);
@@ -77,7 +86,7 @@ function tone(t, type, f0, f1, dur, vol, wet = 0.4, attack = 0.01, lp = 0, dist 
 
 const last = {};
 export function sfx(name, p = 1) {
-  if (!ctx || !enabled) return;
+  if (!ctx) return;
   const now = ctx.currentTime;
   // rate-limit spammy sounds so the mix stays punchy rather than mushy
   const lim = { hit: 0.045, edeath: 0.06, eswing: 0.08 }[name] || 0;
@@ -162,6 +171,68 @@ export function sfx(name, p = 1) {
     case 'nomp':
       tone(t, 'square', 140, 90, 0.18, 0.2, 0.2, 0.005, 800);
       break;
+    case 'dodge':
+      noise(t, 0.3, 'bandpass', 700, 4000, 2.2, 0.6, 0.4, 0.03);
+      tone(t, 'sine', 300, 900, 0.2, 0.2, 0.4, 0.01);
+      break;
+    case 'perfect':
+      [880, 1318, 1760].forEach((f, i) => tone(t + i * 0.04, 'triangle', f, f, 0.9, 0.18, 0.9, 0.005));
+      boom(t, 60, 200, 0.5, 0.6, 0.6);
+      noise(t, 0.8, 'highpass', 6000, 3000, 0.7, 0.3, 0.9, 0.01);
+      break;
+    case 'block':
+      tone(t, 'square', 1400, 900, 0.18, 0.25, 0.5, 0.001, 5000, 4);
+      tone(t, 'triangle', 2600, 2200, 0.35, 0.15, 0.6, 0.001);
+      boom(t, 200, 80, 0.15, 0.5, 0.2);
+      break;
+    case 'explode':
+      boom(t, 140, 20, 1.2, 1.4, 0.5);
+      noise(t, 1.0, 'lowpass', 4000, 100, 0.8, 1.0, 0.6, 0.002, 30);
+      break;
+    case 'beam':
+      tone(t, 'sawtooth', 220, 110, 1.2, 0.3, 0.6, 0.05, 1500, 10);
+      noise(t, 1.2, 'bandpass', 2000, 600, 3, 0.5, 0.6, 0.05);
+      boom(t, 90, 30, 0.8, 0.9, 0.4);
+      break;
+    case 'teleport':
+      tone(t, 'sine', 200, 1600, 0.35, 0.3, 0.7, 0.01);
+      noise(t, 0.4, 'bandpass', 500, 5000, 5, 0.4, 0.7, 0.02);
+      break;
+    case 'freeze':
+      for (let i = 0; i < 6; i++) tone(t + i * 0.025, 'triangle', 2400 + Math.random() * 2000, 1500, 0.5, 0.1, 0.8, 0.002);
+      noise(t, 1.0, 'highpass', 3000, 8000, 0.7, 0.5, 0.8, 0.01);
+      boom(t, 120, 40, 0.6, 0.9, 0.4);
+      break;
+    case 'blades':
+      for (let i = 0; i < 3; i++) noise(t + i * 0.04, 0.25, 'bandpass', 5000, 1200, 3, 0.45, 0.4, 0.005);
+      tone(t, 'sawtooth', 900, 300, 0.25, 0.12, 0.4, 0.005, 4000);
+      break;
+    case 'gale':
+      noise(t, 0.9, 'bandpass', 200, 1800, 1.5, 1.0, 0.5, 0.08);
+      boom(t, 70, 30, 0.9, 1.2, 0.4);
+      break;
+    case 'judgment':
+      boom(t, 50, 18, 2.5, 1.5, 0.7);
+      [65.4, 98, 130.8, 196].forEach(f => tone(t, 'sawtooth', f, f, 2.5, 0.16, 0.8, 0.3, 1800, 3));
+      noise(t, 2.5, 'bandpass', 300, 3000, 1, 0.6, 0.8, 0.5);
+      break;
+    case 'coin':
+      tone(t, 'triangle', 1318, 1318, 0.12, 0.12, 0.5, 0.002); tone(t + 0.07, 'triangle', 1760, 1760, 0.3, 0.12, 0.6, 0.002);
+      break;
+    case 'star':
+      boom(t, 120, 40, 0.5, 0.9, 0.4);
+      [784, 1046, 1318].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.7, 0.16, 0.8, 0.005));
+      break;
+    case 'unlock':
+      boom(t, 100, 30, 0.8, 1, 0.5);
+      [392, 523, 659, 784].forEach((f, i) => tone(t + i * 0.07, 'sawtooth', f, f, 1, 0.1, 0.8, 0.01, 3000));
+      break;
+    case 'back':
+      boom(t, 120, 50, 0.2, 0.5, 0.3); noise(t, 0.15, 'bandpass', 1500, 500, 2, 0.25, 0.5, 0.005);
+      break;
+    case 'step':
+      boom(t, 70, 40, 0.18, 0.5, 0.15);
+      break;
     case 'ui':
       boom(t, 160, 60, 0.25, 0.6, 0.3);
       noise(t, 0.2, 'bandpass', 3000, 900, 2, 0.3, 0.5, 0.005);
@@ -177,30 +248,77 @@ export function sfx(name, p = 1) {
   }
 }
 
-// Dark ambient bed: detuned drone + slow taiko pulse.
-export function startMusic() {
-  if (!ctx || music) return;
-  const g = ctx.createGain(); g.gain.value = 0; g.connect(musicGain);
-  g.gain.setTargetAtTime(1, ctx.currentTime, 2);
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 3; lp.connect(g);
-  const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 0.07; lg.gain.value = 220; lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
-  const oscs = [36.7, 36.95, 55, 73.4, 110.3].map((f, i) => {
-    const o = ctx.createOscillator(); o.type = i < 2 ? 'sawtooth' : 'triangle'; o.frequency.value = f;
-    const og = ctx.createGain(); og.gain.value = i < 2 ? 0.25 : 0.12; o.connect(og); og.connect(lp); o.start(); return o;
-  });
-  const vg = ctx.createGain(); vg.gain.value = 0.25; g.connect(vg); vg.connect(verb);
-  let beat = 0;
-  const iv = setInterval(() => {
-    if (!enabled || !music) return;
-    const t = ctx.currentTime + 0.02;
-    const pat = [1, 0, 0, 0.5, 1, 0, 0.6, 0];
-    const v = pat[beat % 8]; beat++;
-    if (v && music.intense) {
-      const o = ctx.createOscillator(), gg = ctx.createGain();
-      o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.4);
-      env(gg, t, 0.005, 0.5 * v, 0.45); o.connect(gg); gg.connect(musicGain); o.start(t); o.stop(t + 0.5);
-    }
-  }, 260);
-  music = { g, oscs, lfo, iv, intense: false };
+
+// ---------------- music: step sequencer with three synth scores ----------------
+let mus = null, pendingTrack = null;
+const N2F = n => 440 * Math.pow(2, (n - 69) / 12);
+function initMusic() {
+  mus = { track: null, step: 0, next: 0, gain: null, timer: null };
+  mus.timer = setInterval(schedule, 25);
 }
-export function musicIntense(on) { if (music) music.intense = on; }
+const TRACKS = {
+  // tempo, steps per bar 16, chord roots (midi) per bar
+  menu: { bpm: 72, chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]], arp: true, drums: 'soft', bass: 'drone' },
+  stage: { bpm: 118, chords: [[45, 48, 52], [41, 45, 48], [43, 47, 50], [40, 44, 47]], arp: true, drums: 'drive', bass: 'pulse' },
+  boss: { bpm: 142, chords: [[40, 43, 47], [40, 43, 47], [41, 44, 48], [39, 43, 46]], arp: false, drums: 'heavy', bass: 'dist', stabs: true },
+  victory: { bpm: 96, chords: [[48, 52, 55], [45, 48, 52], [41, 45, 48], [43, 47, 50]], arp: true, drums: 'soft', bass: 'drone', once: 2 },
+};
+export function playMusic(name) {
+  if (!ctx) { pendingTrack = name; return; }
+  if (mus.track === name) return;
+  const old = mus.gain; if (old) { old.gain.setTargetAtTime(0, ctx.currentTime, 0.6); setTimeout(() => old.disconnect(), 3000); }
+  mus.track = name; mus.step = 0; mus.next = ctx.currentTime + 0.1; mus.bars = 0;
+  if (!name) { mus.gain = null; return; }
+  const g = ctx.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(1, ctx.currentTime, 0.8); g.connect(musicGain);
+  const send = ctx.createGain(); send.gain.value = 0.35; g.connect(send); send.connect(verb);
+  mus.gain = g;
+}
+function mnote(t, type, f, dur, v, lp = 3000, q = 1, atk = 0.01, dist = 0) {
+  const o = ctx.createOscillator(), g = ctx.createGain(), fl = ctx.createBiquadFilter();
+  o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = q;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + atk); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let last = o; o.connect(fl); last = fl;
+  if (dist) { const sh = ctx.createWaveShaper(); sh.curve = makeDist(dist); fl.connect(sh); last = sh; }
+  last.connect(g); g.connect(mus.gain); o.start(t); o.stop(t + dur + 0.05);
+}
+function mkick(t, v, f0 = 140) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.25);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+  o.connect(g); g.connect(mus.gain); o.start(t); o.stop(t + 0.45);
+}
+function mnoise(t, dur, type, f, v) {
+  const s = ctx.createBufferSource(); s.buffer = noiseBuf; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f;
+  const g = ctx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(fl); fl.connect(g); g.connect(mus.gain); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+}
+function schedule() {
+  if (!ctx || !mus || !mus.track || !mus.gain) return;
+  const T = TRACKS[mus.track], spb = 60 / T.bpm / 4;
+  while (mus.next < ctx.currentTime + 0.12) {
+    const t = mus.next, st = mus.step % 16, bar = Math.floor(mus.step / 16), ch = T.chords[bar % T.chords.length];
+    // pad at bar start
+    if (st === 0) {
+      if (T.once && bar >= T.once * T.chords.length) { mus.track = null; return; }
+      const len = spb * 16 + 0.3;
+      ch.forEach(n => { mnote(t, 'sawtooth', N2F(n + 12), len, 0.045, 900, 1, 0.6); mnote(t, 'sawtooth', N2F(n + 12) * 1.006, len, 0.04, 900, 1, 0.6); });
+      if (T.bass === 'drone') mnote(t, 'triangle', N2F(ch[0] - 12), len, 0.18, 400, 1, 0.4);
+    }
+    if (T.bass === 'pulse' && st % 2 === 0) mnote(t, 'sawtooth', N2F(ch[0] - 12), spb * 1.6, 0.13, 500 + (st % 8 === 0 ? 400 : 0), 4, 0.005);
+    if (T.bass === 'dist' && st % 1 === 0) mnote(t, 'sawtooth', N2F(ch[0] - 12 + (st === 14 ? 3 : 0)), spb * 0.9, 0.09, 700, 3, 0.003, 6);
+    if (T.arp && st % 2 === 0) { const n = ch[(st / 2) % 3] + 24 + (st >= 8 ? 12 : 0) * (mus.track === 'menu' ? 0 : 1); mnote(t, 'triangle', N2F(n), spb * 3, mus.track === 'menu' ? 0.05 : 0.04, 4000, 1, 0.005); }
+    if (T.stabs && (st === 0 || st === 6 || st === 12)) ch.forEach(n => mnote(t, 'sawtooth', N2F(n + 12), spb * 2, 0.06, 2200, 2, 0.005, 2));
+    // drums
+    if (T.drums === 'soft') { if (st === 0) mkick(t, 0.5, 90); if (st === 8 && bar % 2) mkick(t, 0.3, 80); }
+    if (T.drums === 'drive') {
+      if (st % 4 === 0) mkick(t, 0.75); if (st === 4 || st === 12) { mnoise(t, 0.18, 'bandpass', 1800, 0.35); mkick(t, 0.2, 220); }
+      if (st % 2 === 1) mnoise(t, 0.04, 'highpass', 8000, 0.08);
+    }
+    if (T.drums === 'heavy') {
+      if (st % 4 === 0 || st === 3 || st === 11) mkick(t, 0.85); if (st === 4 || st === 12) { mnoise(t, 0.22, 'bandpass', 1500, 0.45); mkick(t, 0.25, 240); }
+      mnoise(t, 0.03, 'highpass', 9000, st % 2 ? 0.05 : 0.09);
+      if (st === 0 && bar % 2 === 0) mnoise(t, 1.2, 'highpass', 5000, 0.12);
+    }
+    mus.next += spb; mus.step++;
+  }
+}

@@ -16,65 +16,160 @@
 <body>
 <canvas id="c"></canvas>
 
+<!-- ================= HUD ================= -->
 <div id="hud" class="hidden">
-  <!-- player panel -->
   <div id="pPanel">
-    <div id="portraitWrap"><canvas id="portrait" width="160" height="160"></canvas><div id="lvl">Lv. 12</div></div>
+    <div id="portraitWrap"><canvas id="portrait" width="160" height="160"></canvas><div id="lvl">Lv. 1</div></div>
     <div id="bars">
-      <div class="bar hp"><i></i><span id="hpTxt">850/850</span></div>
+      <div class="bar hp"><i></i><span id="hpTxt">0/0</span></div>
       <div class="bar sh"><i></i></div>
-      <div class="bar mp"><i></i><span id="mpTxt">320/320</span></div>
+      <div class="bar mp"><i></i><span id="mpTxt">0/0</span></div>
     </div>
   </div>
-  <div id="wavePanel"><div class="wv" id="waveTxt">Wave 1</div><div class="en">Enemies: <b id="enemyTxt">6</b></div></div>
-  <!-- title + pause -->
+  <div id="wavePanel"><div class="sn" id="stageName">Stage 1</div><div class="wv" id="waveTxt">Wave 1</div><div class="en">Enemies: <b id="enemyTxt">0</b></div></div>
   <div id="logoSmall"><div class="lg1">THE</div><div class="lg2">THIRTEENTH</div><div class="lg3"><span class="dia">◆</span>DIMENSION<span class="dia">◆</span></div></div>
   <button id="pauseBtn" aria-label="Pause"><span></span><span></span></button>
-  <div id="objPanel"><div class="oh">◈ MAIN OBJECTIVE</div><div class="ob" id="objTxt">Defeat all enemies (Wave 1/3)</div></div>
-  <div id="bossBar" class="hidden"><div class="bn">ABYSSAL WARLORD</div><div class="bb"><i></i></div></div>
-  <!-- controls -->
+  <div id="objPanel"><div class="oh">◈ MAIN OBJECTIVE</div><div class="ob" id="objTxt"></div><div class="shards">◆ <span id="shardTxt">0</span></div></div>
+  <div id="bossBar" class="hidden"><div class="bn"><span id="bossName"></span> <small id="bossPhase"></small></div><div class="bb"><i></i></div></div>
+  <div id="combo"><b id="comboNum">0</b><span>HITS</span></div>
+  <div id="tutBox" class="hidden"></div>
   <div id="stick"><div id="stickRing"></div><div id="knob"></div></div>
   <div id="skills">
-    <button class="sk" id="sk1" data-k="1"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>K</small></button>
-    <button class="sk" id="sk2" data-k="2"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>⇧</small></button>
-    <button class="sk" id="sk3" data-k="3"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>U</small></button>
+    <button class="sk" id="sk1"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>K</small></button>
+    <button class="sk" id="sk2"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>L</small></button>
+    <button class="sk" id="sk3"><canvas width="96" height="96"></canvas><div class="cd"></div><em></em><small>U</small></button>
+    <button class="sk" id="dodgeBtn"><canvas width="96" height="96"></canvas><div class="cd"></div><small>␣</small></button>
     <button class="sk" id="potBtn"><canvas width="96" height="96"></canvas><b id="potTxt">x3</b><small>Q</small></button>
+    <button class="sk" id="lockBtn"><canvas width="96" height="96"></canvas><small>Tab</small></button>
     <button id="atkBtn"><canvas width="200" height="200"></canvas><small>J</small></button>
   </div>
-  <div id="expWrap"><div id="expBar"><i></i><span id="expTxt">EXP 1,240 / 2,000</span></div><div id="emblem"><div>13</div></div></div>
+  <div id="expWrap"><div id="expBar"><i></i><span id="expTxt">EXP 0 / 0</span></div><div id="emblem"><div>13</div></div></div>
   <div id="banner"></div>
   <div id="dmgLayer"></div>
   <div id="vignette"></div>
 </div>
 
-<div id="title" class="screen on">
-  <div class="tBg"></div>
-  <div class="bigLogo"><div class="lg1">THE</div><div class="lg2">THIRTEENTH</div><div class="lg3"><span class="dia">◆</span>DIMENSION<span class="dia">◆</span></div></div>
-  <p class="tag">Thirteen seals. One heir. Break the Abyssal Legion.</p>
-  <button class="btn primary" id="startBtn">ENTER THE DIMENSION</button>
-  <div class="help" id="helpTxt"></div>
+<!-- ================= MAIN MENU ================= -->
+<div id="menu" class="screen">
+  <div class="menuCol">
+    <div class="bigLogo"><div class="lg1">THE</div><div class="lg2">THIRTEENTH</div><div class="lg3"><span class="dia">◆</span>DIMENSION<span class="dia">◆</span></div></div>
+    <p class="tag">Thirteen seals. One heir. Break the Abyssal Legion.</p>
+    <div class="mbtns">
+      <button class="btn primary" id="continueBtn">CONTINUE<small id="continueInfo"></small></button>
+      <button class="btn" id="newBtn">NEW GAME</button>
+      <button class="btn" id="settingsBtn">SETTINGS</button>
+      <button class="btn" id="creditsBtn">CREDITS</button>
+    </div>
+  </div>
+  <div class="ver">v2.0 · tap anywhere to wake the sound</div>
 </div>
-<div id="pause" class="screen">
-  <h2>PAUSED</h2>
-  <button class="btn primary" id="resumeBtn">RESUME</button>
-  <button class="btn" id="soundBtn">SOUND: ON</button>
-  <button class="btn" id="qualBtn">QUALITY: HIGH</button>
-  <button class="btn" id="restartBtn">RESTART</button>
-  <div class="help" id="helpTxt2"></div>
+
+<!-- ================= SETTINGS ================= -->
+<div id="settings" class="screen panelScreen">
+  <div class="panel">
+    <h2>SETTINGS</h2>
+    <div class="tabs"><button data-tab="sAudio" class="on">AUDIO</button><button data-tab="sVideo">VIDEO</button><button data-tab="sControls">CONTROLS</button></div>
+    <div class="tabBody">
+      <div id="sAudio" class="pane on">
+        <label>Master <input type="range" min="0" max="1" step="0.05" data-set="master"><output></output></label>
+        <label>Music <input type="range" min="0" max="1" step="0.05" data-set="music"><output></output></label>
+        <label>Effects <input type="range" min="0" max="1" step="0.05" data-set="sfx"><output></output></label>
+      </div>
+      <div id="sVideo" class="pane">
+        <label>Quality <select data-set="quality"><option value="auto">Auto</option><option value="low">Low (phones)</option><option value="high">High (reflections)</option></select></label>
+        <label>Screen shake <input type="range" min="0" max="1.5" step="0.1" data-set="shake"><output></output></label>
+        <p class="note">Reflective floors switch on or off the next time the game loads.</p>
+      </div>
+      <div id="sControls" class="pane">
+        <label>Camera sensitivity <input type="range" min="0.3" max="2.5" step="0.1" data-set="sens"><output></output></label>
+        <label>Invert camera up/down <input type="checkbox" data-set="invertY"></label>
+        <div class="ctrlTable" id="ctrlTable"></div>
+      </div>
+    </div>
+    <div class="row"><button class="btn small danger" id="resetSaveBtn">RESET SAVE</button><button class="btn primary" id="settingsBack">BACK</button></div>
+  </div>
 </div>
-<div id="over" class="screen">
-  <h2 class="red">YOU HAVE FALLEN</h2>
-  <p id="overTxt"></p>
-  <button class="btn primary" id="retryBtn">RISE AGAIN</button>
+
+<!-- ================= CREDITS ================= -->
+<div id="credits" class="screen panelScreen">
+  <div class="panel credits">
+    <h2>CREDITS</h2>
+    <p><b>Concept, characters &amp; vision</b><br>Lord A'lhjmii</p>
+    <p><b>Built with</b><br>Grok Bot</p>
+    <p><b>Engine</b><br>three.js (MIT) · Web Audio synthesis · no samples, no build step</p>
+    <p><b>Fonts</b><br>Cinzel &amp; Rajdhani (SIL Open Font License)</p>
+    <p class="note">Every sound, song, model and effect in this game is generated in code at runtime.</p>
+    <button class="btn primary" id="creditsBack">BACK</button>
+  </div>
 </div>
-<div id="win" class="screen">
-  <h2>DIMENSION CLEANSED</h2>
-  <p id="winTxt"></p>
-  <button class="btn primary" id="endlessBtn">ENDLESS MODE</button>
-  <button class="btn" id="againBtn">PLAY AGAIN</button>
+
+<!-- ================= STORY INTRO ================= -->
+<div id="intro" class="screen">
+  <div class="letterbox top"></div><div class="letterbox bot"></div>
+  <div id="introText"></div>
+  <div id="introHint">tap to continue</div>
+  <button class="btn small" id="skipIntro">SKIP ▸▸</button>
 </div>
+
+<!-- ================= MAP ================= -->
+<div id="map" class="screen">
+  <div class="topbar">
+    <button class="btn small" id="mapMenu">◂ MENU</button>
+    <div class="tTitle">DIMENSION MAP</div>
+    <div class="res"><span>Lv <b id="mapLv">1</b></span><span>★ <b id="mapStars">0</b>/39</span><span class="sh">◆ <b id="mapShards">0</b></span></div>
+    <button class="btn small primary" id="mapSanctum">SANCTUM ▸</button>
+  </div>
+  <div class="realmTabs" id="realmTabs"></div>
+  <div class="mapBody">
+    <div class="realmView" id="realmView"><svg id="mapPaths"></svg><div id="mapNodes"></div><div class="realmBlurb" id="realmBlurb"></div></div>
+    <div class="stageCard" id="stageCard"></div>
+  </div>
+</div>
+
+<!-- ================= SANCTUM (upgrades) ================= -->
+<div id="sanctum" class="screen">
+  <div class="topbar">
+    <button class="btn small" id="sanBack">◂ MAP</button>
+    <div class="tTitle">SANCTUM</div>
+    <div class="res"><span>Lv <b id="sanLv">1</b></span><span class="sh">◆ <b id="sanShards">0</b></span></div>
+  </div>
+  <div class="sanBody">
+    <div class="heroInfo" id="heroInfo"></div>
+    <div class="sanPanel">
+      <div class="tabs"><button data-stab="skills" class="on">SKILLS</button><button data-stab="stats">STATS</button><button data-stab="relics">RELICS</button></div>
+      <div class="sanContent" id="sanContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RESULTS ================= -->
+<div id="results" class="screen panelScreen">
+  <div class="panel results">
+    <h2 id="resTitle">VICTORY</h2>
+    <div class="sub" id="resSub"></div>
+    <div class="stars" id="resStars"><span>★</span><span>★</span><span>★</span></div>
+    <div class="resGrid" id="resGrid"></div>
+    <div class="crit" id="resCrit"></div>
+    <div class="row"><button class="btn" id="resRetry">RETRY</button><button class="btn" id="resSanctum">SANCTUM</button><button class="btn primary" id="resContinue">CONTINUE</button></div>
+  </div>
+</div>
+
+<!-- ================= PAUSE ================= -->
+<div id="pause" class="screen panelScreen">
+  <div class="panel pausePanel">
+    <h2>PAUSED</h2>
+    <div class="sub" id="pauseInfo"></div>
+    <button class="btn primary" id="resumeBtn">RESUME</button>
+    <button class="btn" id="restartBtn">RESTART STAGE</button>
+    <button class="btn" id="pauseSettings">SETTINGS</button>
+    <button class="btn" id="quitBtn">QUIT TO MAP</button>
+  </div>
+</div>
+
+<div id="confirm" class="screen panelScreen"><div class="panel"><h3 id="confirmTxt"></h3><div class="row"><button class="btn" id="confirmNo">CANCEL</button><button class="btn primary danger" id="confirmYes">CONFIRM</button></div></div></div>
+<div id="toast"></div>
 <div id="rotate"><div>⟳</div><p>Turn your phone sideways to play</p></div>
-<div id="loading">Summoning the dimension…</div>
+<div id="loading"><div>THE THIRTEENTH DIMENSION</div><small>Summoning the dimension…</small></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

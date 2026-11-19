@@ -93,6 +93,62 @@ export function makeFX(scene, quality) {
     return g;
   }
 
+
+  // ---- telegraphs: red ground decals that fill up until the hit lands ----
+  const teleMat = (o = 0.25) => new THREE.MeshBasicMaterial({ color: new THREE.Color(1.3, 0.06, 0.03), transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  function teleLine(start, dir, len, width, life) {
+    const g = new THREE.Group(); g.position.copy(start).setY(0.1); g.rotation.y = Math.atan2(dir.x, dir.z);
+    const out = new THREE.Mesh(new THREE.PlaneGeometry(width, len), teleMat(0.18)); out.rotation.x = -Math.PI / 2; out.position.z = len / 2; g.add(out);
+    const fillG = new THREE.PlaneGeometry(width, len); fillG.translate(0, len / 2, 0);
+    const fill = new THREE.Mesh(fillG, teleMat(0.35)); fill.rotation.set(Math.PI / 2, 0, 0); g.add(fill);
+    const edgeM = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.3, 0.15), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.PlaneGeometry(0.08, len), edgeM); e.rotation.x = -Math.PI / 2; e.position.set(s * width / 2, 0.01, len / 2); g.add(e); }
+    scene.add(g); items.push({ m: g, t: 0, life, kind: 'teleLine', fill, edgeM });
+  }
+  function teleCone(pos, dir, ang, r, life) {
+    const g = new THREE.Group(); g.position.copy(pos).setY(0.1); g.rotation.y = Math.atan2(dir.x, dir.z);
+    const geo = new THREE.CircleGeometry(r, 32, Math.PI / 2 - ang / 2, ang);
+    const out = new THREE.Mesh(geo, teleMat(0.16)); out.rotation.x = -Math.PI / 2; out.rotation.z = Math.PI; g.add(out);
+    const fill = new THREE.Mesh(geo, teleMat(0.35)); fill.rotation.x = -Math.PI / 2; fill.rotation.z = Math.PI; g.add(fill);
+    out.rotation.set(Math.PI / 2, 0, 0); fill.rotation.set(Math.PI / 2, 0, 0);
+    scene.add(g); items.push({ m: g, t: 0, life, kind: 'teleCone', fill });
+  }
+  // expanding shock ring that is itself a hazard (visual only here)
+  function ringWave(center, maxR, life, color = 0xff3322) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.copy(center).setY(0.25); scene.add(m);
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.8, 64, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(1.2), transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    wall.position.y = 0.4; m.add(wall); wall.rotation.x = Math.PI / 2;
+    items.push({ m, t: 0, life, kind: 'ringWave', maxR });
+  }
+  // flying blade mesh for Phase Blades
+  const bladeGeo = new THREE.ConeGeometry(0.12, 1.1, 4); bladeGeo.rotateX(Math.PI / 2);
+  function bladeMesh(color = [0.5, 2.6, 2.2]) { const m = new THREE.Mesh(bladeGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(...color) })); m.scale.set(1, 0.3, 1); scene.add(m); return m; }
+  const orbGeo = new THREE.SphereGeometry(0.28, 12, 8);
+  const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.6, 0.3) });
+  function orbMesh(scale = 1) { const m = new THREE.Mesh(orbGeo, orbMat); m.scale.setScalar(scale); scene.add(m); return m; }
+  function remove(m) { scene.remove(m); }
+  // ice shards erupting
+  const iceMat = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x2a8cff, emissiveIntensity: 1.2, roughness: 0.1, transparent: true, opacity: 0.9 });
+  const iceGeo = new THREE.OctahedronGeometry(0.5);
+  function iceBurst(center, r, n = 18) {
+    const g = new THREE.Group(); g.position.copy(center).setY(0);
+    for (let i = 0; i < n; i++) { const a = i / n * 6.28 + Math.random() * 0.3, rr = r * (0.35 + Math.random() * 0.65); const c = new THREE.Mesh(iceGeo, iceMat); c.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr); c.scale.set(0.5, 1.5 + Math.random() * 2, 0.5); c.rotation.set((Math.random() - .5) * 0.6, Math.random() * 3, (Math.random() - .5) * 0.6); g.add(c); }
+    scene.add(g); items.push({ m: g, t: 0, life: 1.4, kind: 'ice', noDispose: true });
+  }
+  // gale cone wave
+  function cone(center, dir, r, color = 0x5dff7a) {
+    const geo = new THREE.RingGeometry(0.5, 1, 32, 1, -0.6, 1.2);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.rotation.order = 'YXZ'; m.rotation.y = Math.atan2(dir.x, dir.z) - Math.PI / 2; m.rotation.x = -Math.PI / 2; m.position.copy(center).setY(1);
+    scene.add(m); items.push({ m, t: 0, life: 0.45, kind: 'gale', r });
+  }
+  // full-screen-ish pillar of light
+  function pillar(center, color = [0.6, 1.6, 3.2], h = 18, w = 1.2, life = 0.6) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w * 0.6, h, 16, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(...color), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.position.copy(center); m.position.y = h / 2; scene.add(m); items.push({ m, t: 0, life, kind: 'pillar' });
+  }
+
   function update(dt) {
     for (let i = 0; i < N; i++) {
       if (life[i] <= 0) continue;
@@ -108,13 +164,19 @@ export function makeFX(scene, quality) {
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]; it.t += dt; const k = it.t / it.life;
-      if (k >= 1) { if (it.kind === 'vortex') vLight.intensity = 0; scene.remove(it.m); it.m.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); }); items.splice(i, 1); continue; }
+      if (k >= 1) { if (it.kind === 'vortex') vLight.intensity = 0; scene.remove(it.m); if (!it.noDispose) it.m.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); }); items.splice(i, 1); continue; }
       if (it.kind === 'arc') { it.m.material.opacity = 0.85 * (1 - k); it.m.scale.setScalar(it.s0 + k * 0.4); }
       else if (it.kind === 'shock') { const s = it.r * (0.2 + 0.8 * Math.pow(k, 0.5)); it.m.scale.set(s, s, 1); it.m.material.opacity = 1 - k; }
+      else if (it.kind === 'teleLine') { it.fill.scale.y = k; it.edgeM.opacity = 0.6 + Math.sin(it.t * 30) * 0.4; }
+      else if (it.kind === 'teleCone') { it.fill.scale.set(k, k, 1); }
+      else if (it.kind === 'ringWave') { const r = it.maxR * k; it.m.scale.set(r, r, 1); it.m.children[0].scale.set(1, 1, 1); it.m.material.opacity = 1 - k * 0.6; it.m.children[0].material.opacity = 0.5 * (1 - k); }
+      else if (it.kind === 'ice') { const s = k < 0.15 ? k / 0.15 : (k > 0.8 ? (1 - k) / 0.2 : 1); it.m.scale.set(1, Math.max(0.01, s), 1); }
+      else if (it.kind === 'gale') { const r = it.r * (0.2 + k); it.m.scale.set(r, r, 1); it.m.material.opacity = 1 - k; }
+      else if (it.kind === 'pillar') { it.m.material.opacity = 1 - k; it.m.scale.set(1 - k * 0.6, 1, 1 - k * 0.6); }
       else if (it.kind === 'tele') { it.fill.scale.setScalar(k); it.m.material.opacity = 0.6 + Math.sin(it.t * 30) * 0.4; }
       else if (it.kind === 'bolt') { it.m.children.forEach(c => c.material.opacity = (1 - k) * (Math.random() < 0.8 ? 1 : 0.3)); }
       else if (it.kind === 'vortex') { it.m.children[0].rotation.z += dt * 4; it.m.children[1].rotation.z -= dt * 7; const s = Math.min(1, it.t * 4) * (k > 0.9 ? (1 - k) * 10 : 1); it.m.scale.setScalar(Math.max(0.01, s)); it.core.scale.setScalar(1 + Math.sin(it.t * 20) * 0.15); vLight.intensity = 40 * Math.max(0, s); }
     }
   }
-  return { burst, ringBurst, arc, shock, telegraph, bolt, vortex, update, clearAll() { for (const it of items) scene.remove(it.m); items.length = 0; life.fill(0); for (let i = 0; i < N; i++) pos[i * 3 + 1] = -999; } };
+  return { burst, ringBurst, arc, shock, telegraph, teleLine, teleCone, ringWave, bladeMesh, orbMesh, remove, iceBurst, cone, pillar, bolt, vortex, update, clearAll() { for (const it of items) scene.remove(it.m); items.length = 0; life.fill(0); for (let i = 0; i < N; i++) pos[i * 3 + 1] = -999; } };
 }
