@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildWorld } from './world.js';
 import { buildHero } from './hero.js';
@@ -31,14 +32,32 @@ const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
 let pr = Math.min(devicePixelRatio, quality.low ? 1.25 : (isTouch ? 1.5 : 1.75));
 renderer.setPixelRatio(pr);
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 800);
-const camFill = new THREE.DirectionalLight(0xbcd4ff, 1.1); camFill.position.set(0.3, 0.6, 1); camera.add(camFill); camera.add(camFill.target); camFill.target.position.set(0, 0, -1); scene.add(camera);
+const camFill = new THREE.DirectionalLight(0xbcd4ff, 1.25); camFill.position.set(0.3, 0.6, 1); camera.add(camFill); camera.add(camFill.target); camFill.target.position.set(0, 0, -1); scene.add(camera);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.7, 0.35, 0.9);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.75, 0.4, 0.88);
 composer.addPass(bloom);
+// cheap film grade: gentle vignette, animated grain, a touch more saturation
+const gradePass = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, amount: { value: 0.38 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float time; uniform float amount;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)) + time * 61.7) * 43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(l), c.rgb, 1.13);
+      c.rgb *= vec3(0.98, 1.0, 1.05);
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - dot(d, d) * amount;
+      c.rgb += (hash(vUv * vec2(1920.0, 1080.0)) - 0.5) * 0.028;
+      gl_FragColor = c;
+    }`,
+});
+composer.addPass(gradePass);
 composer.addPass(new OutputPass());
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -73,6 +92,7 @@ drawPortrait($('#portrait'));
 function show(id) {
   $$('.screen').forEach(s => s.classList.toggle('on', s.id === id));
   $('#hud').classList.toggle('hidden', !(mode === 'stage' || mode === 'paused'));
+  document.body.classList.toggle('instage', mode === 'stage' || mode === 'paused');
 }
 function toast(msg, t = 1.8) { const el = $('#toast'); el.innerHTML = msg; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), t * 1000); }
 let confirmCb = null;
@@ -111,9 +131,11 @@ function openSettings() {
   $('#ctrlTable').innerHTML = (isTouch ? [
     ['Left stick', 'Move'], ['Star button', 'Attack · hold for 3-hit combo'], ['Wing button', 'Dodge (invincible) · dodge just before a hit for slow-mo'],
     ['Skill buttons', 'Your 3 equipped skills'], ['Red heart', 'Potion'], ['Crosshair', 'Lock on to the nearest enemy'], ['Drag screen', 'Turn the camera'],
+    ['Green wing button', 'FLY — tap to take off / land (free, no cost) · hold while airborne to rise'], ['Down-arrow button', 'Descend while flying (appears in the air)'],
   ] : [
-    ['W A S D', 'Move'], ['J / left mouse', 'Attack · hold for 3-hit combo'], ['Space / Shift', 'Dodge · perfect dodge = slow-mo'], ['K L U  or  1 2 3', 'Skills'],
+    ['W A S D', 'Move'], ['J / left mouse', 'Attack · hold for 3-hit combo'], ['Space / Shift', 'Dodge · perfect dodge = slow-mo (on the ground)'], ['K L U  or  1 2 3', 'Skills'],
     ['Q', 'Potion'], ['Tab / middle mouse', 'Lock on'], ['Mouse drag / ← →', 'Camera'], ['Esc / P', 'Pause'],
+    ['F', 'FLY — toggle flight on/off (free, no cost)'], ['Space / Shift (in the air)', 'Rise / descend while flying'],
   ]).map(([a, b]) => `<b>${a}</b><span>${b}</span>`).join('');
   show('settings');
 }
@@ -378,12 +400,13 @@ addEventListener('keydown', e => {
   if (mode === 'stage') {
     const c = e.code;
     if (c === 'KeyJ') { input.atk = true; game.attack(); }
-    if (c === 'Space' || c === 'ShiftLeft' || c === 'ShiftRight') game.dodge();
+    if (c === 'Space' || c === 'ShiftLeft' || c === 'ShiftRight') { if (!(game.S && game.S.P.flyOn)) game.dodge(); }
     if (c === 'KeyK' || c === 'Digit1') game.skill(0);
     if (c === 'KeyL' || c === 'Digit2') game.skill(1);
     if (c === 'KeyU' || c === 'Digit3') game.skill(2);
     if (c === 'KeyQ' || c === 'Digit4') game.potion();
-    if (c === 'Tab' || c === 'KeyF') game.toggleLock();
+    if (c === 'Tab') game.toggleLock();
+    if (c === 'KeyF') game.toggleFly();
     if (c === 'Escape' || c === 'KeyP') pause(true);
   } else if (mode === 'paused' && (e.code === 'Escape' || e.code === 'KeyP')) { if ($('#settings').classList.contains('on')) show('pause'); else pause(false); }
   else if (mode === 'intro' && (e.code === 'Space' || e.code === 'Enter')) introStep();
@@ -419,6 +442,19 @@ holdBtn($('#dodgeBtn'), () => game.dodge());
 holdBtn($('#sk1'), () => game.skill(0)); holdBtn($('#sk2'), () => game.skill(1)); holdBtn($('#sk3'), () => game.skill(2));
 holdBtn($('#potBtn'), () => game.potion());
 holdBtn($('#lockBtn'), () => game.toggleLock());
+// flight buttons: FLY taps toggle flight; holding FLY while airborne rises;
+// a quick tap while airborne lands. The down button descends while held.
+let flyHold = false, sinkHold = false, flyPressT = 0;
+const flyBtn = $('#flyBtn'), sinkBtn = $('#sinkBtn');
+flyBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); flyBtn.classList.add('press'); try { flyBtn.setPointerCapture(e.pointerId); } catch (_) { } if (mode !== 'stage') return; if (game.S && game.S.P.flyOn) { flyHold = true; flyPressT = performance.now(); } else game.toggleFly(); });
+const flyEnd = () => { flyBtn.classList.remove('press'); if (flyHold && performance.now() - flyPressT < 250 && mode === 'stage') game.toggleFly(); flyHold = false; };
+flyBtn.addEventListener('pointerup', flyEnd); flyBtn.addEventListener('pointercancel', flyEnd); flyBtn.addEventListener('lostpointercapture', flyEnd);
+sinkBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); sinkBtn.classList.add('press'); try { sinkBtn.setPointerCapture(e.pointerId); } catch (_) { } sinkHold = true; });
+const sinkEnd = () => { sinkBtn.classList.remove('press'); sinkHold = false; };
+sinkBtn.addEventListener('pointerup', sinkEnd); sinkBtn.addEventListener('pointercancel', sinkEnd); sinkBtn.addEventListener('lostpointercapture', sinkEnd);
+// portrait hint: one small dismissible note, never a wall
+try { if (localStorage.getItem('td13-porthint')) document.body.classList.add('noph'); } catch (_) { }
+$('#portHint').addEventListener('click', () => { document.body.classList.add('noph'); try { localStorage.setItem('td13-porthint', '1'); } catch (_) { } });
 // camera drag on canvas (+ mouse attack)
 const drags = new Map(); let mouseAtk = false;
 canvas.addEventListener('pointerdown', e => {
@@ -479,15 +515,37 @@ function bgCamera(dt, t) {
 // ---------------------------------------------------------------- loop
 let last = performance.now(), time = 0;
 const perf = { acc: 0, n: 0, done: false };
+// FPS watchdog: sustained slow frames step quality down (pixel ratio, ambient
+// particles, bloom) before the frame rate collapses; it steps back up when the
+// device is comfortably fast again.
+const watch = { acc: 0, n: 0, level: 0, last: 0, base: 0 };
+function applyWatch() {
+  if (!watch.base) watch.base = pr;
+  pr = Math.max(0.75, watch.base * [1, 0.85, 0.7, 0.55][watch.level]); resize();
+  if (world.setParticleScale) world.setParticleScale([1, 0.7, 0.45, 0.25][watch.level]);
+  bloom.strength = 0.75 - watch.level * 0.06;
+}
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; time += dt;
+  gradePass.uniforms.time.value = time % 97;
   if (mode === 'paused') { composer.render(); return; }
   if (mode === 'stage' || mode === 'results') {
     if (mode === 'stage') { if (!window.TD || !window.TD.bot) readMove(); } else { input.mx = input.my = 0; input.atk = false; }
     if (!isTouch && mode === 'stage') { if (keys.ArrowLeft) game.rotateCam(-6, 0); if (keys.ArrowRight) game.rotateCam(6, 0); }
+    const flyOn = !!(game.S && game.S.P.flyOn);
+    input.rise = flyOn && (keys.Space || flyHold) ? 1 : 0;
+    input.sink = flyOn && (keys.ShiftLeft || keys.ShiftRight || sinkHold) ? 1 : 0;
     game.update(dt, time);
     if (mode === 'stage' && !perf.done) { perf.acc += dt; perf.n++; if (perf.n > 150) { perf.done = true; if (perf.acc / perf.n > 1 / 36 && pr > 1) { pr = 1; resize(); } } }
+    if (mode === 'stage') {
+      watch.acc += dt; watch.n++;
+      if (watch.n >= 120) {
+        const fps = watch.n / Math.max(watch.acc, 1e-4); watch.acc = 0; watch.n = 0;
+        if (fps < 45 && watch.level < 3 && time - watch.last > 4) { watch.level++; watch.last = time; applyWatch(); }
+        else if (fps > 57 && watch.level > 0 && time - watch.last > 8) { watch.level--; watch.last = time; applyWatch(); }
+      }
+    }
   } else {
     hero.update(dt, idleSt);
     for (const e of introLegion) { try { animateEnemy(e, dt, time); } catch (_) { } }

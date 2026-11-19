@@ -18,8 +18,8 @@ export function createGame(env) {
   let save = null, settings = env.settings;
   let S = null;
   const cam = { yaw: 0, pitch: 0.3, dist: 9.2, shake: 0 };
-  const input = { mx: 0, my: 0, atk: false };
-  let hitstop = 0, slowmo = 0;
+  const input = { mx: 0, my: 0, atk: false, rise: 0, sink: 0 };
+  let hitstop = 0, slowmo = 0, flyHintDone = false;
 
   // lock-on markers
   const lockMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.3, 0.2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
@@ -41,16 +41,18 @@ export function createGame(env) {
         pos: new THREE.Vector3(0, 0, 9), heading: Math.PI, ...st, hp: st.maxHp, mp: st.maxMp, sh: st.maxSh, shT: 0,
         combo: 0, comboT: 0, atkIdx: -1, atkT: 0, atkDur: 0.3, atkHit: false, queued: false,
         dodgeT: 0, dodgeCd: 0, dodgeDir: V(), inv: 0, perfect: false, cd: {}, castT: 0, hitT: 0, deadT: -1, moveAmt: 0, potions: 3, hits13: 0, victory: false,
+        fly: 0, flyOn: false, vy: 0, wasAir: false,
       },
       enemies: [], projectiles: [], hazards: [], vortices: [], pblades: [], strikes: [],
       waveIdx: -1, pending: [], spawnT: 0, betweenT: 0, bosses: [], cine: null,
       surviveLeft: info.survive || 0, survSpawnT: 1,
       stats: { kills: 0, dmgDealt: 0, dmgTaken: 0, maxCombo: 0, combo: 0, comboTimer: 0, potions: 0, shards: 0, exp: 0, levels: 0 },
       lock: null, soft: null,
-      tut: tutorial ? { step: 0, t: 0, moved: 0, rot: 0 } : null,
+      tut: tutorial ? { step: 0, t: 0, moved: 0, rot: 0, wallT: 0 } : null,
       scale: stageScale(id),
     };
     for (const k of save.equip) if (k) S.P.cd[k] = 0;
+    if (!flyHintDone && !tutorial) S.hintT = 3.2;
     hero.root.position.copy(S.P.pos); hero.root.rotation.y = S.P.heading;
     cam.yaw = 0; cam.pitch = 0.3; cam.dist = 9.2;
     camera.position.set(0, 18, -14);
@@ -99,7 +101,7 @@ export function createGame(env) {
   }
   function startWave(i) {
     S.waveIdx = i; S.pending = S.info.waves[i].slice(); S.spawnT = 0.8;
-    if (i > 0) { banner(`WAVE ${i + 1}<small>OF ${S.info.waves.length}</small>`); sfx('horn'); }
+    if (i > 0 && S.waveBannerShown !== i) { S.waveBannerShown = i; banner(`WAVE ${i + 1}<small>OF ${S.info.waves.length}</small>`); sfx('horn'); }
     hudDirty = true;
   }
   function spawnBoss() {
@@ -207,6 +209,10 @@ export function createGame(env) {
   }
   function hurtPlayer(dmg, from, o = {}) {
     const P = S.P; if (P.deadT >= 0 || S.mode !== 'play') return false;
+    // airborne: ground-bound attacks whiff beneath the Heir. Only attacks flagged
+    // air-capable (projectiles, beams, sky-fire, boss leaps) can reach him, and
+    // some of those only up to a ceiling (o.airMax).
+    if (P.pos.y > 2.3 && (!o.air || (o.airMax && P.pos.y > o.airMax))) return false;
     if (P.dodgeT > 0 || P.inv > 0) {
       if (P.dodgeT > 0 && !P.perfect) {
         P.perfect = true; slowmo = 0.7; sfx('perfect');
@@ -254,11 +260,14 @@ export function createGame(env) {
   }
   function attackHit(second) {
     const P = S.P, f = fwd(P.heading), heavy = P.combo === 2;
-    const c = P.pos.clone().setY(1.2);
+    // sword arcs live at the Heir's own height: from altitude he can only strike
+    // tall or flying foes — ground foes must be swooped at (descend to reach them)
+    const c = P.pos.clone().setY(P.pos.y + 1.2);
     fx.arc(c, P.heading, heavy ? 3.8 : 3.0, heavy ? 0x9fe8ff : 0x4fb8ff, P.combo === 1 ? -1 : 1, P.combo === 1 ? 0.25 : -0.15);
     let any = false;
     for (const e of S.enemies) {
       if (e.state === 'dead' || e.state === 'spawn') continue;
+      if (P.pos.y > e.info.h + 0.9) continue;
       tmp2.copy(e.root.position).sub(P.pos).setY(0); const d = tmp2.length() - e.info.r;
       const inArc = d < (heavy ? 3.6 : 3.0) && (d < 0.6 || tmp2.normalize().dot(f) > 0.2);
       const inRing = heavy && d < 3.8;
@@ -293,6 +302,19 @@ export function createGame(env) {
     if (!canAct()) return;
     if (S.lock) { S.lock = null; sfx('back'); return; }
     S.lock = nearest(22); if (S.lock) sfx('ui');
+  }
+  // ------------------------------------------------------------ flight
+  // Toggle flight: tap once to take off and stay airborne, tap again to land.
+  // Flight costs nothing — no MP, no stamina, no meter.
+  const FLY_HOVER = 3.4, FLY_MAX = 9.5;
+  function toggleFly() {
+    if (!canAct()) return; const P = S.P;
+    if (P.dodgeT > 0) return;
+    P.flyOn = !P.flyOn;
+    flyHintDone = true;
+    if (P.flyOn) { sfx('gale', 0.9); fx.ringBurst(P.pos.clone().setY(0.2), 30, 0x5fd8ff, 9); fx.burst(P.pos.clone().setY(0.4), 24, 0x5dff8a, 5, 0.6, 2, 1.5); if (S.tut && S.tut.step === 6) tutNext(); }
+    else sfx('dodge', 0.8);
+    hudDirty = true;
   }
   const rankMul = k => SKILL_RANK_MULT[(save.skills[k] || 1) - 1];
   function skill(slot) {
@@ -331,7 +353,7 @@ export function createGame(env) {
       if (t) P.heading = angTo(P.pos, t.root.position);
       for (let i = -2; i <= 2; i++) {
         const dir = fwd(P.heading + i * 0.22), mesh = fx.bladeMesh();
-        mesh.position.copy(P.pos).setY(1.3); mesh.rotation.y = P.heading + i * 0.22;
+        mesh.position.copy(P.pos).setY(P.pos.y + 1.3); mesh.rotation.y = P.heading + i * 0.22;
         S.pblades.push({ m: mesh, v: dir.multiplyScalar(26), t: 0, hit: new Set(), dmg: P.atk * 1.1 * m * voidB });
       }
     } else if (k === 'vortex') {
@@ -390,7 +412,7 @@ export function createGame(env) {
       if (h.src && h.src.state === 'dead' && !h.keep) { h.done = true; continue; }
       if (h.t >= h.delay && !h.done) {
         h.done = true;
-        if (hazardHits(h, S.P.pos)) hurtPlayer(h.dmg, h.pos, { kb: h.kb || 0.8 });
+        if (hazardHits(h, S.P.pos)) hurtPlayer(h.dmg, h.pos, { kb: h.kb || 0.8, air: h.air, airMax: h.airMax });
         if (h.boom) h.boom(h);
         else { fx.shock(h.pos, (h.r || 3) * 2, 0xff3322, 0.4); fx.burst(h.pos.clone().setY(0.4), 26, 0xff4422, 7, 0.6, -6, 2); sfx('slam'); cam.shake = Math.max(cam.shake, 0.4 * settings.shake); }
       }
@@ -461,7 +483,7 @@ export function createGame(env) {
           const a = Math.random() * 6.28; e.root.position.set(Math.sin(a) * 15, 0, Math.cos(a) * 15); fx.shock(e.root.position, 3, 0xff3355, 0.4);
         }
         if (e.cd <= 0 && d < 17) windup(e, 'volley', K.wind);
-      } else if (e.state === 'windup') { face(e, P.pos, 6, dt); if (e.t >= e.windT) { e.state = 'strike'; e.t = 0; sfx('bolt'); for (const s of [-0.28, 0, 0.28]) { const dd = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), s); enemyShot(e.root.position.clone().setY(1.8), dd, 10, K.dmg * e.dmgMul); } } }
+      } else if (e.state === 'windup') { face(e, P.pos, 6, dt); if (e.t >= e.windT) { e.state = 'strike'; e.t = 0; sfx('bolt'); for (const s of [-0.28, 0, 0.28]) { const dd = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), s); dd.y = THREE.MathUtils.clamp((P.pos.y + 1.2 - 1.8) / Math.max(d, 1) * 0.85, -0.4, 1.1); enemyShot(e.root.position.clone().setY(1.8), dd, 10, K.dmg * e.dmgMul); } } }
       else if (e.state === 'strike' && e.t > 0.3) { e.state = 'recover'; e.t = 0; }
       else if (e.state === 'recover' && e.t > 0.5) { e.state = 'approach'; e.cd = 2.6 + Math.random() * 1.4; }
     },
@@ -471,7 +493,7 @@ export function createGame(env) {
         e.want = 1; face(e, P.pos, 6, dt);
         if (d < K.range) {
           windup(e, 'blast', K.wind);
-          e.h = hazard({ type: 'circle', pos: e.root.position.clone(), r: 3.2, delay: K.wind, dmg: K.dmg * e.dmgMul, src: e, boom: h => {
+          e.h = hazard({ type: 'circle', pos: e.root.position.clone(), r: 3.2, delay: K.wind, dmg: K.dmg * e.dmgMul, src: e, air: true, airMax: 5.5, boom: h => {
             fx.shock(h.pos, 8, 0xff6a2a, 0.5); fx.burst(h.pos.clone().setY(1.2), 70, 0xff6a2a, 10, 0.7, -3); sfx('explode'); cam.shake = Math.max(cam.shake, 0.5 * settings.shake);
             if (e.state !== 'dead') { e.state = 'dead'; e.t = 0; S.stats.kills++; hudDirty = true; }
           } });
@@ -480,22 +502,37 @@ export function createGame(env) {
     },
     warlord(e, dt, d, dir) {
       const K = e.info, P = S.P, enr = e.enraged ? 0.78 : 1;
+      // anti-camping: a Heir who hovers out of reach gets leapt at
+      if (P.pos.y > 3.4 && P.deadT < 0) e.campT = (e.campT || 0) + dt; else e.campT = 0;
       if (e.state === 'approach') {
         if (d > 3.4) e.want = 1;
         face(e, P.pos, 3, dt);
         if (e.cd <= 0) {
           let atk = d < 5 ? (Math.random() < 0.5 ? 'slam' : 'sweep') : (d > 9 ? 'charge' : (Math.random() < 0.4 ? 'charge' : 'slam'));
+          if ((e.campT || 0) > 1.6) { atk = 'leap'; e.campT = 0; }
           const f = fwd(e.root.rotation.y), wt = K.wind * enr;
           windup(e, atk, wt);
           if (atk === 'slam') { const c = e.root.position.clone().addScaledVector(dir, 3.3); hazard({ type: 'circle', pos: c, r: 4.6, delay: wt + 0.1, dmg: K.dmg * e.dmgMul, src: e, kb: 2, boom: h => { sfx('slam'); cam.shake = 0.9 * settings.shake; fx.shock(h.pos, 10, 0xff3322, 0.6); fx.ringBurst(h.pos, 50, 0xff4422, 12); fx.burst(h.pos.clone().setY(0.3), 50, 0x334466, 8, 1, -12, 3, 1); if (e.phase2) { fx.ringWave(h.pos, 13, 1.3); S.hazards.push({ type: 'ring', pos: h.pos.clone(), maxR: 13, life: 1.3, t: 0, dmg: K.dmg * e.dmgMul * 0.6 }); } } }); }
           else if (atk === 'sweep') { e.root.rotation.y = angTo(e.root.position, P.pos); hazard({ type: 'cone', pos: e.root.position.clone(), dir: dir.clone(), ang: 2.5, r: 7, delay: wt * 0.85 + 0.1, dmg: K.dmg * e.dmgMul * 0.85, src: e, kb: 2.5, boom: h => { sfx('crit'); cam.shake = 0.6 * settings.shake; fx.arc(h.pos.clone().setY(2), Math.atan2(h.dir.x, h.dir.z), 7, 0xff4422, 1, 0); } }); e.windT = wt * 0.85; }
+          else if (atk === 'leap') {
+            e.root.rotation.y = angTo(e.root.position, P.pos);
+            e.leapFrom = e.root.position.clone(); e.leapTo = P.pos.clone().setY(0);
+            hazard({ type: 'circle', pos: e.leapTo.clone(), r: 3.6, delay: wt + 0.55, dmg: K.dmg * e.dmgMul, src: e, kb: 2, air: true, airMax: 99, boom: h => { sfx('slam'); cam.shake = 1 * settings.shake; fx.shock(h.pos, 11, 0xff3322, 0.6); fx.ringBurst(h.pos, 50, 0xff4422, 12); fx.burst(h.pos.clone().setY(0.3), 50, 0x334466, 8, 1, -12, 3, 1); } });
+          }
           else { e.root.rotation.y = angTo(e.root.position, P.pos); e.chargeDir = dir.clone(); hazard({ type: 'line', pos: e.root.position.clone(), dir: dir.clone(), len: 15, w: 3, delay: 99, dmg: 0, src: e, boom: () => { } }).isCharge = true; }
         }
       } else if (e.state === 'windup' && e.t >= e.windT) {
         e.state = 'strike'; e.t = 0; e.hitDone = false;
         if (e.atk === 'charge') { sfx('dash'); S.hazards.forEach(h => { if (h.src === e && h.isCharge) h.done = true; }); }
+        if (e.atk === 'leap') sfx('dash');
       } else if (e.state === 'strike') {
-        if (e.atk === 'charge') {
+        if (e.atk === 'leap') {
+          const k = Math.min(1, e.t / 0.55);
+          e.root.position.lerpVectors(e.leapFrom, e.leapTo, k);
+          e.root.position.y = Math.sin(k * Math.PI) * 5.6;
+          if (Math.random() < 0.8) fx.burst(e.root.position.clone().setY(e.root.position.y + 1), 3, 0xff4422, 3, 0.4, 0, 2);
+          if (k >= 1) { e.root.position.y = 0; e.state = 'recover'; e.t = 0; }
+        } else if (e.atk === 'charge') {
           if (e.t < 0.85) { e.root.position.addScaledVector(e.chargeDir, 17 * dt); fx.burst(e.root.position.clone().setY(0.3), 3, 0xff4422, 3, 0.4, 0, 2); if (!e.hitDone && e.root.position.distanceTo(P.pos) < 2.6) { e.hitDone = true; hurtPlayer(K.dmg * e.dmgMul, e.root.position, { kb: 3 }); } }
           if (e.t > 1.0) { e.state = 'recover'; e.t = 0; }
         } else if (e.t > 0.45) { e.state = 'recover'; e.t = 0; }
@@ -512,14 +549,14 @@ export function createGame(env) {
           const opts = ['spiral', 'lance']; if (e.phase2) opts.push('meteor', 'meteor');
           const atk = opts[(Math.random() * opts.length) | 0];
           windup(e, atk, atk === 'lance' ? 1.1 : 0.8);
-          if (atk === 'lance') { const L = hazard({ type: 'line', pos: e.root.position.clone(), dir: dir.clone(), len: 30, w: 2, delay: 1.15, dmg: K.dmg * e.dmgMul * 1.2, src: e, boom: h => { sfx('beam'); cam.shake = 0.6 * settings.shake; fx.bolt(h.pos.clone().setY(2.5), h.pos.clone().addScaledVector(h.dir, 30).setY(1), [3, 0.4, 0.3], 0.5, 0.5); fx.bolt(h.pos.clone().setY(2.5), h.pos.clone().addScaledVector(h.dir, 30).setY(1), [3, 1, 0.6], 0.2, 0.5); } }); }
-          if (atk === 'meteor') { for (let i = 0; i < 6; i++) { const p = P.pos.clone().add(new THREE.Vector3((Math.random() - .5) * (i ? 10 : 0), 0, (Math.random() - .5) * (i ? 10 : 0))); if (p.length() > ARENA_R) p.setLength(ARENA_R); hazard({ type: 'circle', pos: p, r: 2.4, delay: 1.3 + i * 0.12, dmg: K.dmg * e.dmgMul, src: e, keep: true, boom: h => { fx.pillar(h.pos, [3, 0.5, 0.3], 22, 1.6, 0.5); fx.shock(h.pos, 6, 0xff4422, 0.4); fx.burst(h.pos.clone().setY(0.5), 40, 0xff5a22, 9, 0.7, -8, 2); sfx('explode'); cam.shake = Math.max(cam.shake, 0.4 * settings.shake); } }); } }
+          if (atk === 'lance') { const L = hazard({ type: 'line', pos: e.root.position.clone(), dir: dir.clone(), len: 30, w: 2, delay: 1.15, dmg: K.dmg * e.dmgMul * 1.2, src: e, air: true, boom: h => { sfx('beam'); cam.shake = 0.6 * settings.shake; fx.bolt(h.pos.clone().setY(2.5), h.pos.clone().addScaledVector(h.dir, 30).setY(1), [3, 0.4, 0.3], 0.5, 0.5); fx.bolt(h.pos.clone().setY(2.5), h.pos.clone().addScaledVector(h.dir, 30).setY(1), [3, 1, 0.6], 0.2, 0.5); } }); }
+          if (atk === 'meteor') { for (let i = 0; i < 6; i++) { const p = P.pos.clone().add(new THREE.Vector3((Math.random() - .5) * (i ? 10 : 0), 0, (Math.random() - .5) * (i ? 10 : 0))); if (p.length() > ARENA_R) p.setLength(ARENA_R); hazard({ type: 'circle', pos: p, r: 2.4, delay: 1.3 + i * 0.12, dmg: K.dmg * e.dmgMul, src: e, keep: true, air: true, boom: h => { fx.pillar(h.pos, [3, 0.5, 0.3], 22, 1.6, 0.5); fx.shock(h.pos, 6, 0xff4422, 0.4); fx.burst(h.pos.clone().setY(0.5), 40, 0xff5a22, 9, 0.7, -8, 2); sfx('explode'); cam.shake = Math.max(cam.shake, 0.4 * settings.shake); } }); } }
         }
       } else if (e.state === 'windup' && e.t >= e.windT) { e.state = 'strike'; e.t = 0; e.shotT = 0; e.spin = Math.random() * 6; }
       else if (e.state === 'strike') {
         if (e.atk === 'spiral') {
           e.shotT -= dt; e.spin += dt * 1.8;
-          if (e.shotT <= 0) { e.shotT = 0.16; sfx('bolt'); for (let i = 0; i < (e.phase2 ? 4 : 3); i++) { const a = e.spin + i / (e.phase2 ? 4 : 3) * Math.PI * 2; enemyShot(e.root.position.clone().setY(3.4), new THREE.Vector3(Math.sin(a), 0, Math.cos(a)), 7.5, K.dmg * e.dmgMul * 0.6, 1.2); } }
+          if (e.shotT <= 0) { e.shotT = 0.16; sfx('bolt'); for (let i = 0; i < (e.phase2 ? 4 : 3); i++) { const a = e.spin + i / (e.phase2 ? 4 : 3) * Math.PI * 2; enemyShot(e.root.position.clone().setY(3.4), new THREE.Vector3(Math.sin(a), THREE.MathUtils.clamp((P.pos.y + 1.2 - 3.4) / 13, -0.3, 0.85), Math.cos(a)), 7.5, K.dmg * e.dmgMul * 0.6, 1.2); } }
           if (e.t > 2.4) { e.state = 'recover'; e.t = 0; }
         } else if (e.t > 0.4) { e.state = 'recover'; e.t = 0; }
       } else if (e.state === 'recover' && e.t > 0.8) { e.state = 'approach'; e.cd = 1.3 + Math.random() * 0.8; }
@@ -555,9 +592,9 @@ export function createGame(env) {
     e.root.rotation.y = Math.atan2(dir.x, dir.z);
     if (atk === 'dash') { e.chargeDir = dir; hazard({ type: 'line', pos: e.root.position.clone(), dir, len: 10.5, w: 1.8, delay: 99, dmg: 0, src: e, boom: () => { } }).isCharge = true; }
     if (atk === 'slash') hazard({ type: 'cone', pos: e.root.position.clone(), dir, ang: 2.0, r: 3.6, delay: e.windT + 0.08, dmg: K.dmg * e.dmgMul, src: e, boom: h => fx.arc(h.pos.clone().setY(1.2), Math.atan2(h.dir.x, h.dir.z), 3.4, 0xff3322, 1, 0) });
-    if (atk === 'rain') { sfx('bolt'); for (let i = 0; i < 5; i++) { const p = P.pos.clone().add(new THREE.Vector3((Math.random() - .5) * (i ? 9 : 0), 0, (Math.random() - .5) * (i ? 9 : 0))); hazard({ type: 'circle', pos: p, r: 2.2, delay: 1.1 + i * 0.1, dmg: K.dmg * e.dmgMul, src: e, keep: true, boom: h => { fx.bolt(h.pos.clone().setY(18), h.pos.clone().setY(0.1), [3, 0.4, 0.3], 0.14, 0.3); fx.shock(h.pos, 5, 0xff3322, 0.4); sfx('lightning'); } }); } }
-    if (atk === 'pull') { e.pullC = new THREE.Vector3(0, 0, 0); fx.vortex(e.pullC, 3.4); sfx('vortex'); hazard({ type: 'circle', pos: e.pullC.clone(), r: 4.2, delay: 3.0, dmg: K.dmg * e.dmgMul * 1.4, src: e, keep: true, boom: h => { fx.shock(h.pos, 12, 0xff2a5a, 0.6); fx.burst(h.pos.clone().setY(1), 90, 0xff2a5a, 12, 1, -4, 2); sfx('explode'); cam.shake = 0.8 * settings.shake; } }); }
-    if (atk === 'judg') { banner('THIRTEEN SEALS BREAK', true, 1.4); for (let i = 0; i < 13; i++) { const a = i / 13 * Math.PI * 2, r = 3 + (i % 3) * 3.5; const p = P.pos.clone().add(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r)); if (p.length() > ARENA_R) p.setLength(ARENA_R); hazard({ type: 'circle', pos: p, r: 2, delay: 1.0 + i * 0.12, dmg: K.dmg * e.dmgMul * 0.8, src: e, keep: true, boom: h => { fx.pillar(h.pos, [3, 0.4, 0.4], 18, 1.2, 0.4); sfx('hit'); } }); } }
+    if (atk === 'rain') { sfx('bolt'); for (let i = 0; i < 5; i++) { const p = P.pos.clone().add(new THREE.Vector3((Math.random() - .5) * (i ? 9 : 0), 0, (Math.random() - .5) * (i ? 9 : 0))); hazard({ type: 'circle', pos: p, r: 2.2, delay: 1.1 + i * 0.1, dmg: K.dmg * e.dmgMul, src: e, keep: true, air: true, boom: h => { fx.bolt(h.pos.clone().setY(18), h.pos.clone().setY(0.1), [3, 0.4, 0.3], 0.14, 0.3); fx.shock(h.pos, 5, 0xff3322, 0.4); sfx('lightning'); } }); } }
+    if (atk === 'pull') { e.pullC = new THREE.Vector3(0, 0, 0); fx.vortex(e.pullC, 3.4); sfx('vortex'); hazard({ type: 'circle', pos: e.pullC.clone(), r: 4.2, delay: 3.0, dmg: K.dmg * e.dmgMul * 1.4, src: e, keep: true, air: true, boom: h => { fx.shock(h.pos, 12, 0xff2a5a, 0.6); fx.burst(h.pos.clone().setY(1), 90, 0xff2a5a, 12, 1, -4, 2); sfx('explode'); cam.shake = 0.8 * settings.shake; } }); }
+    if (atk === 'judg') { banner('THIRTEEN SEALS BREAK', true, 1.4); for (let i = 0; i < 13; i++) { const a = i / 13 * Math.PI * 2, r = 3 + (i % 3) * 3.5; const p = P.pos.clone().add(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r)); if (p.length() > ARENA_R) p.setLength(ARENA_R); hazard({ type: 'circle', pos: p, r: 2, delay: 1.0 + i * 0.12, dmg: K.dmg * e.dmgMul * 0.8, src: e, keep: true, air: true, boom: h => { fx.pillar(h.pos, [3, 0.4, 0.4], 18, 1.2, 0.4); sfx('hit'); } }); } }
   }
 
   function updateEnemies(dt, time) {
@@ -566,6 +603,10 @@ export function createGame(env) {
       e.t += dt; const pos = e.root.position;
       if (e.blockT > 0) e.blockT -= dt;
       if (e.state === 'dead') {
+        // death reads as a death: the model plays its fall, a second burst blooms
+        // mid-dissolve, and the body shrinks away as it sinks
+        animateEnemy(e, dt, time);
+        if (!e.deadFx && e.t > 0.22) { e.deadFx = true; fx.burst(pos.clone().setY(Math.max(0.4, pos.y + e.info.h * 0.4)), e.boss ? 90 : 26, 0x4fc8ff, 6, 0.7, -2, 1.5); fx.shock(pos, e.boss ? 9 : 3, 0x7fe8ff, 0.4); }
         pos.y -= dt * 1.5; e.body.rotation.x += dt * 1.2; e.root.scale.multiplyScalar(1 - dt * 0.8);
         if (e.t > 0.9) { scene.remove(e.root); e.removed = true; }
         continue;
@@ -575,6 +616,8 @@ export function createGame(env) {
       if (e.state === 'spawn') { pos.y = Math.min(0, -3 + e.t * 4); if (e.t > 0.8) { e.state = 'approach'; e.t = 0; pos.y = 0; } animateEnemy(e, dt, time); continue; }
       if (S.cine) { animateEnemy(e, dt, time); continue; }
       tmp.copy(P.pos).sub(pos).setY(0); const d = tmp.length(); const dir = tmp.normalize().clone();
+      // tutorial neutering (cd=999) must never outlive the early steps
+      if (e.cd > 6 && (!S.tut || S.tut.step >= 3)) e.cd = 1.5;
       e.cd -= dt; e.want = 0;
       if (e.state === 'stagger') { if (e.t > (e.boss ? 0.15 : 0.32)) { e.state = 'approach'; e.t = 0; e.cd = Math.max(e.cd, 0.4); } }
       else if (P.deadT < 0) AI[e.kind](e, dt, d, dir);
@@ -602,7 +645,7 @@ export function createGame(env) {
     for (const p of S.projectiles) {
       p.t += dt; p.m.position.addScaledVector(p.v, dt);
       if (Math.random() < 0.5) fx.burst(p.m.position, 1, 0xff4422, 0.6, 0.3, 0, 0.5);
-      if (P.deadT < 0 && p.m.position.distanceTo(tmp.copy(P.pos).setY(1.4)) < p.r + 0.5) { if (hurtPlayer(p.dmg, p.m.position)) { p.dead = true; fx.burst(p.m.position, 20, 0xff4422, 6, 0.5); } }
+      if (P.deadT < 0 && p.m.position.distanceTo(tmp.copy(P.pos).setY(P.pos.y + 1.4)) < p.r + 0.5) { if (hurtPlayer(p.dmg, p.m.position, { air: true })) { p.dead = true; fx.burst(p.m.position, 20, 0xff4422, 6, 0.5); } }
       if (p.t > 4 || p.m.position.length() > ARENA_R + 6) p.dead = true;
       if (p.dead) fx.remove(p.m);
     }
@@ -611,7 +654,7 @@ export function createGame(env) {
     for (const b of S.pblades) {
       b.t += dt; b.m.position.addScaledVector(b.v, dt); b.m.rotation.z += dt * 20;
       if (Math.random() < 0.6) fx.burst(b.m.position, 1, 0x4dffd2, 0.5, 0.25, 0, 0.3);
-      for (const e of S.enemies) if (!b.hit.has(e) && e.state !== 'dead' && e.state !== 'spawn' && tmp.copy(e.root.position).setY(1.3).distanceTo(b.m.position) < e.info.r + 0.6) { b.hit.add(e); dmgEnemy(e, b.dmg, { kb: 3, from: b.m.position.clone().addScaledVector(b.v, -0.1) }); }
+      for (const e of S.enemies) if (!b.hit.has(e) && e.state !== 'dead' && e.state !== 'spawn' && tmp.copy(e.root.position).setY(Math.min(e.info.h * 0.55, Math.max(0.6, b.m.position.y))).distanceTo(b.m.position) < e.info.r + 0.6) { b.hit.add(e); dmgEnemy(e, b.dmg, { kb: 3, from: b.m.position.clone().addScaledVector(b.v, -0.1) }); }
       if (b.t > 0.65) { b.dead = true; fx.remove(b.m); }
     }
     S.pblades = S.pblades.filter(b => !b.dead);
@@ -641,18 +684,35 @@ export function createGame(env) {
     const f = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)), r = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
     moveVec.set(0, 0, 0).addScaledVector(f, iy).addScaledVector(r, ix); if (moveVec.lengthSq() > 1) moveVec.normalize();
     if (P.deadT >= 0) { P.deadT += dt; return; }
-    if (S.tut && S.tut.step === 0 && m > 0.2) { S.tut.moved += dt; if (S.tut.moved > 0.7) tutNext(); }
+    if (S.tut && S.tut.step === 0 && m > 0.2) { S.tut.moved += dt; if (S.tut.moved > 0.35) tutNext(); }
     if (P.dodgeT > 0) {
       P.dodgeT -= dt; P.pos.addScaledVector(P.dodgeDir, 21 * dt);
-      if (Math.random() < 0.7) fx.burst(P.pos.clone().setY(1.2), 2, 0x9fe8ff, 1.5, 0.35, 0, 1.5);
+      if (Math.random() < 0.7) fx.burst(P.pos.clone().setY(P.pos.y + 1.2), 2, 0x9fe8ff, 1.5, 0.35, 0, 1.5);
     } else {
       const slow = P.atkIdx >= 0 ? 0.3 : 1;
-      P.pos.addScaledVector(moveVec, 7.4 * slow * dt);
+      P.pos.addScaledVector(moveVec, 7.4 * slow * (P.fly > 0.5 ? 1.3 : 1) * dt);
       if (m > 0.1 && P.atkIdx < 0) { const tgt = Math.atan2(moveVec.x, moveVec.z); P.heading += wrap(tgt - P.heading) * Math.min(1, dt * 14); }
-      if (m > 0.3 && P.atkIdx < 0) { P.stepT = (P.stepT || 0) - dt; if (P.stepT <= 0) { P.stepT = 0.29; sfx('step'); } }
+      if (m > 0.3 && P.atkIdx < 0 && P.pos.y < 0.3) { P.stepT = (P.stepT || 0) - dt; if (P.stepT <= 0) { P.stepT = 0.29; sfx('step'); } }
     }
     P.moveAmt += ((P.dodgeT > 0 ? 1 : m * (P.atkIdx >= 0 ? 0.3 : 1)) - P.moveAmt) * Math.min(1, dt * 10);
-    if (P.pos.length() > ARENA_R) P.pos.setLength(ARENA_R);
+    const hl = Math.hypot(P.pos.x, P.pos.z);
+    if (hl > ARENA_R) { P.pos.x *= ARENA_R / hl; P.pos.z *= ARENA_R / hl; }
+    // ---- flight: spring toward hover height (or the ground when toggled off);
+    // rise/sink inputs push beyond it. Flight is free — nothing is ever spent. ----
+    P.fly += ((P.flyOn ? 1 : 0) - P.fly) * Math.min(1, dt * 3.4);
+    if (P.flyOn || P.pos.y > 0.02) {
+      const targetAlt = P.flyOn ? FLY_HOVER : 0;
+      let vy = Math.max(-8, Math.min(8, (targetAlt - P.pos.y) * 2.4));
+      if (input.rise) vy += 6.5;
+      if (input.sink) vy -= 8.5;
+      P.vy = vy;
+      P.pos.y = Math.max(0, Math.min(FLY_MAX, P.pos.y + vy * dt));
+      if (P.pos.y > 0.4) P.wasAir = true;
+      if (!P.flyOn && P.pos.y <= 0.02) {
+        P.pos.y = 0;
+        if (P.wasAir) { P.wasAir = false; fx.ringBurst(P.pos, 22, 0x5fd8ff, 7); fx.burst(P.pos.clone().setY(0.3), 18, 0x8fb8d8, 4, 0.5, -2, 2); sfx('step', 0.7); cam.shake = Math.max(cam.shake, 0.12 * settings.shake); }
+      }
+    } else P.vy = 0;
     if (P.atkIdx >= 0) {
       P.atkT += dt;
       if (P.atkHit === 0 && P.atkT >= P.atkDur * 0.42) { P.atkHit = 1; attackHit(); }
@@ -674,7 +734,7 @@ export function createGame(env) {
     const i = S.info;
     if (S.mode === 'intro') {
       S.introT += dt;
-      if (S.introT > 2.4) { S.mode = 'play'; if (i.type === 'waves') startWave(0); else if (i.type === 'boss') spawnBoss(); else { S.spawnT = 0.5; banner(`SURVIVE<small>${i.survive} SECONDS</small>`); } if (S.tut) showTut(); }
+      if (S.introT > 2.4) { S.mode = 'play'; if (i.type === 'waves') startWave(0); else if (i.type === 'boss') spawnBoss(); else { S.spawnT = 0.5; banner(`SURVIVE<small>${i.survive} SECONDS</small>`); } if (S.tut) { showTut(); S.tut.wallT = performance.now(); } }
       return;
     }
     if (S.mode !== 'play') return;
@@ -697,11 +757,14 @@ export function createGame(env) {
     } else if (i.type === 'boss') {
       if (S.bosses.length && S.bosses.every(b => b.state === 'dead')) { for (const e of S.enemies) if (e.state !== 'dead') { e.state = 'dead'; e.t = 0; } S.pending = []; win(); }
     }
-    // tutorial step 2 (combo) finishes when a 3rd hit lands; camera step on rotation or time
+    // tutorial step 2 (combo) finishes when a 3rd hit lands; camera step on rotation or time.
+    // Safety net: every step also auto-advances after 9 REAL seconds (wall clock, so a
+    // low frame rate can never soft-lock the tutorial — or the enemies it neuters).
     if (S.tut) {
       S.tut.t += dt;
-      if (S.tut.step === 2 && S.tut.comboDone) tutNext();
-      if (S.tut.step === 5 && (S.tut.rot > 0.6 || S.tut.t > 5)) tutNext();
+      if (performance.now() - (S.tut.wallT || 0) > 9000) tutNext();
+      else if (S.tut && S.tut.step === 2 && S.tut.comboDone) tutNext();
+      else if (S.tut && S.tut.step === 5 && (S.tut.rot > 0.6 || S.tut.t > 5)) tutNext();
     }
   }
   function win() {
@@ -746,7 +809,7 @@ export function createGame(env) {
     box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
   }
   function tutNext() {
-    if (!S.tut) return; S.tut.step++; S.tut.t = 0; sfx('coin');
+    if (!S.tut) return; S.tut.step++; S.tut.t = 0; S.tut.wallT = performance.now(); sfx('coin');
     if (S.tut.step === 3) for (const e of S.enemies) e.cd = 1 + Math.random() * 2;
     if (S.tut.step >= TUTORIAL.length) { $('#tutBox').classList.add('hidden'); S.tut = null; save.tutorialDone = true; return; }
     showTut();
@@ -770,16 +833,18 @@ export function createGame(env) {
       camLook.copy(b).setY(b.y + S.cine.target.info.h * 0.6); camera.lookAt(camLook);
       return;
     }
-    if (S.P.victory) { const yaw = (S.t * 0.4) % (Math.PI * 2); camera.position.lerp(tmp.set(P.pos.x + Math.sin(yaw) * 6, 2.6, P.pos.z + Math.cos(yaw) * 6), Math.min(1, dt * 2)); camera.lookAt(P.pos.x, 1.8, P.pos.z); return; }
+    if (S.P.victory) { const yaw = (S.t * 0.4) % (Math.PI * 2); camera.position.lerp(tmp.set(P.pos.x + Math.sin(yaw) * 6, P.pos.y + 2.6, P.pos.z + Math.cos(yaw) * 6), Math.min(1, dt * 2)); camera.lookAt(P.pos.x, P.pos.y + 1.8, P.pos.z); return; }
     if (S.lock && S.lock.state !== 'dead') {
       const t = S.lock.root.position; const want = Math.atan2(-(t.x - P.pos.x), -(t.z - P.pos.z));
       cam.yaw += wrap(want - cam.yaw) * Math.min(1, dt * 3);
     } else if (S.lock) S.lock = null;
+    // flight: the camera pulls back and rides higher, looking slightly down at the Heir
+    const flyK = P.fly || 0, dist = cam.dist + flyK * 4.4;
     const cp = Math.cos(cam.pitch);
-    camTarget.set(P.pos.x + Math.sin(cam.yaw) * cp * cam.dist + Math.cos(cam.yaw) * 1.5, 1.5 + Math.sin(cam.pitch) * cam.dist, P.pos.z + Math.cos(cam.yaw) * cp * cam.dist - Math.sin(cam.yaw) * 1.5);
+    camTarget.set(P.pos.x + Math.sin(cam.yaw) * cp * dist + Math.cos(cam.yaw) * 1.5, P.pos.y + 1.5 + Math.sin(cam.pitch) * dist + flyK * 0.8, P.pos.z + Math.cos(cam.yaw) * cp * dist - Math.sin(cam.yaw) * 1.5);
     camera.position.lerp(camTarget, Math.min(1, dt * 8));
     const f = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)), r = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
-    camLook.copy(P.pos).addScaledVector(f, 5).addScaledVector(r, 3.0).setY(2.3);
+    camLook.copy(P.pos).addScaledVector(f, 5).addScaledVector(r, 3.0).setY(P.pos.y + 2.3 - flyK * 0.7);
     if (cam.shake > 0) { camera.position.x += (Math.random() - .5) * cam.shake * 0.5; camera.position.y += (Math.random() - .5) * cam.shake * 0.5; cam.shake = Math.max(0, cam.shake - dt * 2.5); }
     camera.lookAt(camLook);
   }
@@ -790,8 +855,14 @@ export function createGame(env) {
   }
 
   // ------------------------------------------------------------ HUD
-  let hudDirty = true, bannerT = 0, hudT = 0;
-  function banner(html, red, dur = 2.2) { const b = $('#banner'); b.innerHTML = html; b.classList.toggle('red', !!red); b.classList.add('on'); bannerT = dur; }
+  let hudDirty = true, bannerT = 0, hudT = 0, lastBannerHtml = '', lastBannerAt = -9;
+  function banner(html, red, dur = 2.2) {
+    // an identical banner re-fired within 4s just refreshes its timer — never re-pops
+    const now = performance.now() / 1000;
+    if (html === lastBannerHtml && now - lastBannerAt < 4) { bannerT = Math.max(bannerT, dur); return; }
+    lastBannerHtml = html; lastBannerAt = now;
+    const b = $('#banner'); b.innerHTML = html; b.classList.toggle('red', !!red); b.classList.add('on'); bannerT = dur;
+  }
   const dmgLayer = $('#dmgLayer'), nums = [];
   function dmgNum(pos, text, cls = '', life = 0.9) {
     let n = nums.find(n => n.t <= 0);
@@ -823,6 +894,7 @@ export function createGame(env) {
       return { b, k, cd: b.querySelector('.cd'), t: b.querySelector('em') };
     });
     drawIcon($('#atkBtn canvas'), 'atk'); drawIcon($('#potBtn canvas'), 'pot'); drawIcon($('#dodgeBtn canvas'), 'dodge'); drawIcon($('#lockBtn canvas'), 'lock');
+    const fc = $('#flyBtn canvas'), sc = $('#sinkBtn canvas'); if (fc) drawIcon(fc, 'fly'); if (sc) drawIcon(sc, 'sink');
   }
   function updateHUD(force) {
     if (!S) return; const P = S.P;
@@ -836,6 +908,15 @@ export function createGame(env) {
     }
     if (S.stats.combo >= 3) { el.combo.classList.add('on'); el.comboNum.textContent = S.stats.combo; } else el.combo.classList.remove('on');
     $('#lockBtn').classList.toggle('on', !!S.lock);
+    const fb = $('#flyBtn'); if (fb) fb.classList.toggle('on', !!P.flyOn);
+    document.body.classList.toggle('flying', !!P.flyOn);
+    // one-time flight hint on non-tutorial stages
+    if (!S.tut) {
+      const hb = $('#tutBox');
+      if (S.hintT > 0 && S.mode === 'play') { hb.classList.remove('hidden'); hb.innerHTML = isTouch ? '<b>FLY</b> Tap the wing button to fly — tap again to land. Flying costs nothing.' : '<b>FLY</b> Press <b>F</b> to fly — Space rises, Shift descends, F lands. Flying costs nothing.'; }
+      else if (S.hintT <= 0 && hb.dataset.hint === '1') { hb.classList.add('hidden'); hb.dataset.hint = ''; }
+      if (S.hintT > 0) hb.dataset.hint = '1';
+    }
     hudT -= 1 / 60;
     if (!hudDirty && !force && hudT > 0) return; hudDirty = false; hudT = 0.5;
     el.lvl.textContent = 'Lv. ' + save.lv;
@@ -865,8 +946,9 @@ export function createGame(env) {
     else if (S.mode === 'intro') hero.root.position.copy(S.P.pos);
     if (S.mode === 'end') S.endT += dt;
     updateFlow(dt);
+    if (S.hintT > 0) S.hintT -= rawDt;
     const P = S.P;
-    hero.update(dt, { moveAmt: S.mode === 'play' ? P.moveAmt : 0, atkIdx: P.atkIdx, atkP: P.atkIdx >= 0 ? P.atkT / P.atkDur : 0, dash: P.dodgeT > 0, cast: P.castT > 0 ? Math.sin(Math.min(1, P.castT / 0.45) * Math.PI) : 0, hitT: P.hitT, deadT: P.deadT, victory: P.victory, combat: alive().length > 0 && S.mode === 'play' });
+    hero.update(dt, { moveAmt: S.mode === 'play' ? P.moveAmt : 0, atkIdx: P.atkIdx, atkP: P.atkIdx >= 0 ? P.atkT / P.atkDur : 0, dash: P.dodgeT > 0, cast: P.castT > 0 ? Math.sin(Math.min(1, P.castT / 0.45) * Math.PI) : 0, hitT: P.hitT, deadT: P.deadT, victory: P.victory, combat: alive().length > 0 && S.mode === 'play', fly: P.fly || 0, glide: (P.fly > 0.6 && P.moveAmt > 0.75 && Math.abs(P.vy || 0) < 2) ? 1 : 0, climb: (P.vy || 0) > 2.5 });
     // target markers
     S.soft = S.lock ? null : nearest(7);
     lockRing.visible = !!S.lock; softRing.visible = !!S.soft && S.mode === 'play';
@@ -878,7 +960,7 @@ export function createGame(env) {
   }
 
   return {
-    startStage, stop, update, attack, dodge, skill, potion, toggleLock, rotateCam, input,
+    startStage, stop, update, attack, dodge, skill, potion, toggleLock, toggleFly, rotateCam, input,
     get S() { return S; }, cam,
     debug: {
       killAll: () => S && S.enemies.forEach(e => { if (e.state !== 'dead' && e.state !== 'spawn') dmgEnemy(e, 1e7, { pierce: true }); }),
@@ -886,6 +968,7 @@ export function createGame(env) {
       skipIntro: () => { if (S && S.mode === 'intro') S.introT = 99; },
       bossHalf: () => S && S.bosses.forEach(b => { b.hp = b.maxHp * 0.45; checkBossPhase(b); hudDirty = true; }),
       endCine: () => { if (S) S.cine = null; },
+      fly: () => toggleFly(),
     },
   };
 }

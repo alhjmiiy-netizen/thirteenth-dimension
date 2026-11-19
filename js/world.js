@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
-import { tileTextures, floorRunes, sealTexture, planetTexture, ringTexture, softDot } from './textures.js';
+import { tileTextures, floorRunes, sealTexture, sealSkyTexture, planetTexture, ringTexture, softDot } from './textures.js';
 import { PALETTES } from './data.js';
 
 export const ARENA_R = 23;
@@ -72,27 +72,27 @@ export function buildWorld(scene, renderer, quality) {
   }
   const first = skyFor('azure');
   scene.background = first.sky; scene.environment = first.env;
-  scene.environmentIntensity = 0.35;
-  scene.fog = new THREE.FogExp2(0x030a1e, 0.004);
+  scene.environmentIntensity = 0.4;
+  scene.fog = new THREE.FogExp2(0x030a1e, 0.0052);
 
-  scene.add(new THREE.HemisphereLight(0x3a6dff, 0x020408, 0.22));
-  const moon = new THREE.DirectionalLight(0x9fc8ff, 0.9); moon.position.set(40, 60, -30); scene.add(moon);
+  scene.add(new THREE.HemisphereLight(0x3a6dff, 0x020408, 0.3));
+  const moon = new THREE.DirectionalLight(0x9fc8ff, 1.1); moon.position.set(40, 60, -30); scene.add(moon);
 
   // ---- ringed planet (top-right of the default view) ----
   const planet = new THREE.Group();
   const pMat = new THREE.MeshStandardMaterial({ map: planetTexture(), emissive: 0x2a0d55, emissiveIntensity: 0.6, roughness: 0.8, fog: false });
-  const pl = new THREE.Mesh(new THREE.SphereGeometry(26, 48, 32), pMat); pl.rotation.z = 0.35; planet.add(pl);
-  const atm = new THREE.Mesh(new THREE.SphereGeometry(27.5, 48, 32), new THREE.ShaderMaterial({
+  const pl = new THREE.Mesh(new THREE.SphereGeometry(36, 48, 32), pMat); pl.rotation.z = 0.35; planet.add(pl);
+  const atm = new THREE.Mesh(new THREE.SphereGeometry(38, 48, 32), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: 'varying vec3 n; varying vec3 v; void main(){ n=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.); v=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }',
     fragmentShader: 'varying vec3 n; varying vec3 v; void main(){ float f=pow(1.-abs(dot(n,v)),2.5); gl_FragColor=vec4(vec3(0.7,0.35,1.6)*f*1.6,f); }'
   })); planet.add(atm);
-  const ringGeo = new THREE.RingGeometry(34, 58, 96, 1);
+  const ringGeo = new THREE.RingGeometry(46, 80, 96, 1);
   const uv = ringGeo.attributes.uv, pos = ringGeo.attributes.position;
-  for (let i = 0; i < pos.count; i++) { const r = Math.hypot(pos.getX(i), pos.getY(i)); uv.setXY(i, (r - 34) / 24, 0.5); }
+  for (let i = 0; i < pos.count; i++) { const r = Math.hypot(pos.getX(i), pos.getY(i)); uv.setXY(i, (r - 46) / 34, 0.5); }
   const rings = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ map: ringTexture(), transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false, color: new THREE.Color(1.3, 1.1, 1.6) }));
   rings.rotation.x = Math.PI / 2 - 0.32; rings.rotation.y = 0.35; planet.add(rings);
-  planet.position.set(110, 62, -230); scene.add(planet);
+  planet.position.set(98, 74, -212); scene.add(planet);
   const sun = new THREE.PointLight(0xb070ff, 0, 0); planet.add(sun);
 
   // ---- arena ----
@@ -101,9 +101,9 @@ export function buildWorld(scene, renderer, quality) {
   const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA_R + 3, 72), floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
   let mirror = null;
   if (quality.reflect) {
-    mirror = new Reflector(new THREE.CircleGeometry(ARENA_R + 3, 48), { textureWidth: Math.round(innerWidth * 0.5), textureHeight: Math.round(innerHeight * 0.5), color: 0x8a96b8, clipBias: 0.003 });
+    mirror = new Reflector(new THREE.CircleGeometry(ARENA_R + 3, 48), { textureWidth: Math.round(innerWidth * 0.5), textureHeight: Math.round(innerHeight * 0.5), color: 0xa9bde2, clipBias: 0.003 });
     mirror.rotation.x = -Math.PI / 2; mirror.position.y = -0.02; scene.add(mirror);
-    floorMat.transparent = true; floorMat.opacity = 0.8; floor.renderOrder = -1;
+    floorMat.transparent = true; floorMat.opacity = 0.74; floor.renderOrder = -1;
   }
   const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1b2438, roughness: 0.75, metalness: 0.2 });
   const darkStone = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85, metalness: 0.1 });
@@ -145,12 +145,37 @@ export function buildWorld(scene, renderer, quality) {
     scene.add(g); return g;
   }
   const PR = ARENA_R + 4.5;
-  for (let i = 0; i < 18; i++) {
-    const a = i / 18 * Math.PI * 2 + 0.17;
+  for (let i = 0; i < 22; i++) {
+    const a = i / 22 * Math.PI * 2 + 0.17;
     if (i % 3 === 1) continue;
-    pillar(Math.sin(a) * PR, Math.cos(a) * PR, 6 + Math.random() * 6, Math.random() < 0.4);
+    pillar(Math.sin(a) * PR, Math.cos(a) * PR, 7 + Math.random() * 7, Math.random() < 0.4);
   }
-  [Math.PI * 0.82, Math.PI * 1.18, Math.PI * 0.5, Math.PI * 1.5, Math.PI * 1.0].forEach((a, i) => arch(a, PR + 2.5 + (i === 4 ? 6 : 0), 7 + (i === 4 ? 3 : 0), 7 + (i === 4 ? 4 : 0)));
+  // a second, sadder ring: snapped pillars leaning where they fell
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * Math.PI * 2 + 0.52, r = ARENA_R + 9.5;
+    const p = pillar(Math.sin(a) * r, Math.cos(a) * r, 1.8 + Math.random() * 2.8, true);
+    p.rotation.z = (Math.random() - 0.5) * 0.16; p.rotation.x = (Math.random() - 0.5) * 0.1;
+  }
+  // fallen columns lying in the dark outside the arena rim
+  for (let i = 0; i < 4; i++) {
+    const a = 0.6 + i * 1.45 + Math.random() * 0.4, r = ARENA_R + 3 + Math.random() * 2;
+    const g = new THREE.Group(); g.position.set(Math.sin(a) * r, 0.8, Math.cos(a) * r); g.rotation.y = Math.random() * Math.PI;
+    const len = 3.6 + Math.random() * 2.2;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.82, len, 10), stoneMat); col.rotation.z = Math.PI / 2; g.add(col);
+    const band = new THREE.Mesh(bandGeo, glowBlue); band.rotation.y = Math.PI / 2; band.position.x = len * 0.22; g.add(band);
+    const cap = new THREE.Mesh(capGeo, darkStone); cap.position.x = -len / 2 - 0.4; cap.rotation.z = 0.4; cap.position.y = -0.3; g.add(cap);
+    scene.add(g);
+  }
+  // broken curtain walls with lit window slits, filling the gaps between pillars
+  for (const a of [Math.PI * 0.72, Math.PI * 0.9, Math.PI * 1.1, Math.PI * 1.28, Math.PI * 0.42, Math.PI * 1.58]) {
+    const r = PR + 1.2, h = 3.4 + Math.random() * 1.8;
+    const g = new THREE.Group(); g.position.set(Math.sin(a) * r, 0, Math.cos(a) * r); g.rotation.y = a;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(7.5, h, 0.9), stoneMat); wall.position.y = h / 2; g.add(wall);
+    const jag = new THREE.Mesh(jitter(new THREE.BoxGeometry(7.5, 0.9, 0.95), 0.3), darkStone); jag.position.y = h + 0.3; g.add(jag);
+    for (const wx of [-2.2, 0, 2.2]) { const win = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.9), glowCyan); win.position.set(wx, h * 0.55, -0.47); win.rotation.y = Math.PI; g.add(win); }
+    scene.add(g);
+  }
+  [Math.PI * 0.82, Math.PI * 1.18, Math.PI * 0.5, Math.PI * 1.5, Math.PI * 1.0, Math.PI * 0.66, Math.PI * 1.34].forEach((a, i) => arch(a, PR + 2.5 + (i === 4 ? 6 : 0), 7 + (i === 4 ? 3 : 0), 7 + (i === 4 ? 4 : 0)));
 
   // temple complex on the far side
   function temple(x, z, s, rotY) {
@@ -174,7 +199,7 @@ export function buildWorld(scene, renderer, quality) {
   }
 
   // ---- crystals ----
-  const crystalMat = new THREE.MeshStandardMaterial({ color: 0x48d8ff, emissive: 0x18a0ff, emissiveIntensity: 1.8, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.92 });
+  const crystalMat = new THREE.MeshStandardMaterial({ color: 0x48d8ff, emissive: 0x18a0ff, emissiveIntensity: 1.9, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.92 });
   const crystalGeo = new THREE.OctahedronGeometry(0.5, 0);
   function cluster(x, y, z, s) {
     const g = new THREE.Group(); g.position.set(x, y, z);
@@ -233,14 +258,14 @@ export function buildWorld(scene, renderer, quality) {
   const islands = [];
   const rockMat = new THREE.MeshStandardMaterial({ color: 0x1a2236, roughness: 0.9, flatShading: true });
   const grassTop = new THREE.MeshStandardMaterial({ color: 0x14304a, roughness: 0.8, flatShading: true, emissive: 0x041a30 });
-  for (let i = 0; i < (quality.low ? 9 : 14); i++) {
+  for (let i = 0; i < (quality.low ? 9 : 17); i++) {
     const a = Math.PI + (Math.random() - 0.5) * Math.PI * 1.9, r = 40 + Math.random() * 55, s = 1 + Math.random() * 2.4;
     const g = new THREE.Group();
     const rock = new THREE.Mesh(jitter(new THREE.ConeGeometry(3, 6, 7, 3), 0.9), rockMat); rock.rotation.x = Math.PI; rock.position.y = -3; g.add(rock);
     const top = new THREE.Mesh(jitter(new THREE.CylinderGeometry(3.2, 3, 0.8, 7), 0.4), grassTop); g.add(top);
     if (Math.random() < 0.8) { const c = cluster(0, 0, 0, 0.6); scene.remove(c); c.position.set((Math.random() - .5) * 2, 0.3, (Math.random() - .5) * 2); g.add(c); }
     if (Math.random() < 0.35) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 3, 8), stoneMat); p.position.set(1, 1.8, 0.5); g.add(p); }
-    g.scale.setScalar(s); g.position.set(Math.sin(a) * r, -4 + Math.random() * 30, Math.cos(a) * r); g.rotation.y = Math.random() * 6;
+    g.scale.setScalar(s); g.position.set(Math.sin(a) * r, -2 + Math.random() * 34, Math.cos(a) * r); g.rotation.y = Math.random() * 6;
     g.userData = { by: g.position.y, ph: Math.random() * 6, sp: 0.3 + Math.random() * 0.4 };
     scene.add(g); islands.push(g);
   }
@@ -251,19 +276,25 @@ export function buildWorld(scene, renderer, quality) {
   const sealMesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), sealMat); seal.add(sealMesh);
   const sealOuter = new THREE.Mesh(new THREE.PlaneGeometry(31, 31), runeMat.clone()); sealOuter.material.color = new THREE.Color(0.15, 0.55, 1.4); sealOuter.material.side = THREE.DoubleSide; seal.add(sealOuter);
   const halo = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshBasicMaterial({ map: softDot('#1a6cff'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55, fog: false })); halo.position.z = -0.5; seal.add(halo);
-  // rose
-  const rose = new THREE.Group();
+  // rose (shared builder: layered petal shells + leaves, deep red with green accents)
   const petalMat = new THREE.MeshStandardMaterial({ color: 0xc8102e, emissive: 0x8a0018, emissiveIntensity: 1.3, roughness: 0.45, side: THREE.DoubleSide });
   const petalGeo = new THREE.SphereGeometry(1, 12, 8, 0, Math.PI, 0, Math.PI * 0.6);
-  for (let L = 0; L < 5; L++) {
-    const n = 4 + L, open = 0.15 + L * 0.28, sz = 0.35 + L * 0.17;
-    for (let i = 0; i < n; i++) {
-      const p = new THREE.Mesh(petalGeo, petalMat); p.scale.set(sz, sz * 1.15, sz * 0.75);
-      const pg = new THREE.Group(); pg.rotation.y = i / n * Math.PI * 2 + L * 0.6; p.rotation.x = -open; p.position.z = 0.05 + L * 0.06; pg.add(p); rose.add(pg);
-    }
-  }
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x1f9a3a, emissive: 0x0c5a1c, emissiveIntensity: 0.9, roughness: 0.5, side: THREE.DoubleSide });
-  for (let i = 0; i < 3; i++) { const lf = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), leafMat); lf.scale.set(0.55, 0.08, 1.3); const lg = new THREE.Group(); lg.rotation.y = i / 3 * Math.PI * 2 + 0.5; lf.position.set(0, -0.35, 1.3); lf.rotation.x = 0.25; lg.add(lf); rose.add(lg); }
+  function makeRose(layers = 5) {
+    const rose = new THREE.Group();
+    for (let L = 0; L < layers; L++) {
+      const n = 4 + L, open = 0.15 + L * 0.28, sz = 0.35 + L * 0.17;
+      for (let i = 0; i < n; i++) {
+        const p = new THREE.Mesh(petalGeo, petalMat); p.scale.set(sz, sz * 1.15, sz * 0.75);
+        const pg = new THREE.Group(); pg.rotation.y = i / n * Math.PI * 2 + L * 0.6; p.rotation.x = -open; p.position.z = 0.05 + L * 0.06; pg.add(p); rose.add(pg);
+      }
+    }
+    const heart = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshStandardMaterial({ color: 0xff2a4a, emissive: 0xd00030, emissiveIntensity: 1.8, roughness: 0.4 }));
+    heart.position.y = 0.22; rose.add(heart);
+    for (let i = 0; i < 3; i++) { const lf = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), leafMat); lf.scale.set(0.55, 0.08, 1.3); const lg = new THREE.Group(); lg.rotation.y = i / 3 * Math.PI * 2 + 0.5; lf.position.set(0, -0.35, 1.3); lf.rotation.x = 0.25; lg.add(lf); rose.add(lg); }
+    return rose;
+  }
+  const rose = makeRose();
   rose.rotation.x = Math.PI / 2 - 0.35; rose.position.z = 0.9; rose.scale.setScalar(2.1);
   seal.add(rose);
   const roseLight = new THREE.PointLight(0xff2244, 25, 10, 1.5); roseLight.position.z = 3; seal.add(roseLight);
@@ -280,7 +311,64 @@ export function buildWorld(scene, renderer, quality) {
   const sparks = new THREE.Points(sg, new THREE.PointsMaterial({ map: softDot('#5fd8ff'), size: 0.35, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.6, 1.4, 2.4) }));
   scene.add(sparks);
 
-  W.seal = seal; W.runes = runes; W.floor = floor;
+  // ---- drifting embers: slow ambient motes that wander sideways on the wind ----
+  const EN = quality.low ? 90 : 220;
+  const eg = new THREE.BufferGeometry(), ep = new Float32Array(EN * 3), ev = new Float32Array(EN * 2);
+  for (let i = 0; i < EN; i++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * 46; ep[i * 3] = Math.sin(a) * r; ep[i * 3 + 1] = Math.random() * 22; ep[i * 3 + 2] = Math.cos(a) * r; ev[i * 2] = 0.3 + Math.random() * 0.9; ev[i * 2 + 1] = Math.random() * 6.28; }
+  eg.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+  const embers = new THREE.Points(eg, new THREE.PointsMaterial({ map: softDot('#ffb060'), size: 0.55, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(0.7, 1.2, 2.2) }));
+  scene.add(embers);
+
+  // ---- parallax starfield shell (the baked sky has stars too; these twinkle in 3D) ----
+  const SN = quality.low ? 500 : 1300, sgp = new Float32Array(SN * 3);
+  for (let i = 0; i < SN; i++) { const a = Math.random() * Math.PI * 2, y = Math.random() * 0.85 + 0.08, rxz = Math.sqrt(1 - y * y) * 380; sgp[i * 3] = Math.cos(a) * rxz; sgp[i * 3 + 1] = y * 380; sgp[i * 3 + 2] = Math.sin(a) * rxz; }
+  const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute('position', new THREE.BufferAttribute(sgp, 3));
+  const starPts = new THREE.Points(starGeo, new THREE.PointsMaterial({ map: softDot('#cfe8ff'), size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  scene.add(starPts);
+  // a pale second moon, low on the opposite horizon
+  const moon2 = new THREE.Mesh(new THREE.SphereGeometry(11, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.45, 0.6, 0.95), fog: false }));
+  moon2.position.set(-190, 88, 150); scene.add(moon2);
+  const moon2Halo = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ map: softDot('#3a6cff'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5, fog: false }));
+  moon2Halo.position.copy(moon2.position); scene.add(moon2Halo);
+
+  // ---- floating rock shards orbiting the arena at varied heights ----
+  const shards = [];
+  const shardGeo = jitter(new THREE.ConeGeometry(1, 2.6, 5, 2), 0.35);
+  const nShards = quality.low ? 16 : 30;
+  for (let i = 0; i < nShards; i++) {
+    const g = new THREE.Group();
+    const rock = new THREE.Mesh(shardGeo, rockMat); rock.rotation.x = Math.PI; g.add(rock);
+    if (Math.random() < 0.45) { const c = new THREE.Mesh(crystalGeo, crystalMat); c.scale.set(0.3, 1 + Math.random() * 1.6, 0.3); c.position.y = 0.9; g.add(c); }
+    const a = Math.random() * Math.PI * 2, r = ARENA_R + 9 + Math.random() * 26;
+    g.position.set(Math.sin(a) * r, 3 + Math.random() * 24, Math.cos(a) * r);
+    g.scale.setScalar(0.7 + Math.random() * 1.7); g.rotation.y = Math.random() * 6;
+    g.userData = { by: g.position.y, ph: Math.random() * 6, sp: 0.25 + Math.random() * 0.45, rs: (Math.random() - 0.5) * 0.25 };
+    scene.add(g); shards.push(g);
+  }
+  // tall crystal spires on the rim
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.9; cluster(Math.sin(a) * (ARENA_R + 5.5), 0, Math.cos(a) * (ARENA_R + 5.5), 2.0 + Math.random() * 0.7); }
+
+  // ---- THE SKY SEAL: the Thirteenth Seal enthroned above the arena, rose at its heart ----
+  const skySeal = new THREE.Group();
+  const skySealBase = new THREE.Color(0.35, 1.1, 2.6);
+  const skySealMat = new THREE.MeshBasicMaterial({ map: sealSkyTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, color: skySealBase.clone(), fog: false });
+  const skySealMesh = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), skySealMat); skySeal.add(skySealMesh);
+  const skySealOuter = new THREE.Mesh(new THREE.PlaneGeometry(78, 78), runeMat.clone()); skySealOuter.material.color = new THREE.Color(0.15, 0.55, 1.4); skySealOuter.material.side = THREE.DoubleSide; skySealOuter.material.fog = false; skySeal.add(skySealOuter);
+  const skyHalo = new THREE.Mesh(new THREE.PlaneGeometry(112, 112), new THREE.MeshBasicMaterial({ map: softDot('#1a6cff'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5, fog: false })); skyHalo.position.z = -1; skySeal.add(skyHalo);
+  const skyRose = makeRose(6); skyRose.rotation.x = Math.PI / 2 - 0.3; skyRose.position.z = 1.6; skyRose.scale.setScalar(5.8); skySeal.add(skyRose);
+  const skyRoseLight = new THREE.PointLight(0xff2244, 80, 40, 1.5); skyRoseLight.position.z = 6; skySeal.add(skyRoseLight);
+  const skyOrbiters = [];
+  for (let i = 0; i < 13; i++) { const o = new THREE.Mesh(new THREE.OctahedronGeometry(1.05), glowCyan); o.scale.y = 1.8; skySeal.add(o); skyOrbiters.push(o); }
+  skySeal.position.set(0, 33, -92); skySeal.rotation.x = 0.1; scene.add(skySeal);
+  const skySealLight = new THREE.PointLight(0x2a7cff, 55, 110, 1.4); skySealLight.position.set(0, 27, -66); scene.add(skySealLight);
+
+  // FPS watchdog hook: scale ambient particle counts before touching anything heavier
+  W.setParticleScale = k => {
+    sg.setDrawRange(0, Math.floor(N * k));
+    eg.setDrawRange(0, Math.floor(EN * k));
+  };
+
+  W.seal = seal; W.skySeal = skySeal; W.runes = runes; W.floor = floor;
   const crystalLights = []; scene.traverse(o => { if (o.isPointLight && o.color.getHex() === 0x3ab8ff) crystalLights.push(o); });
   const sparkMat = sparks.material;
   W.palette = 'azure';
@@ -291,8 +379,10 @@ export function buildWorld(scene, renderer, quality) {
     glowBlue.color.setRGB(...P.glow); glowCyan.color.setRGB(...P.glow2); flameMat.color.setRGB(...P.glow);
     runeMat.color.setRGB(...P.rune); runes2.material.color.setRGB(P.rune[0] * 2, P.rune[1] * 2, P.rune[2] * 2);
     crystalMat.color.setHex(P.crystal); crystalMat.emissive.setHex(P.crystalE);
-    crystalLights.forEach(l => l.color.setHex(P.light)); sealLight.color.setHex(P.light);
-    sealBase.copy(new THREE.Color(...P.seal)); sparkMat.color.setRGB(...P.spark);
+    crystalLights.forEach(l => l.color.setHex(P.light)); sealLight.color.setHex(P.light); skySealLight.color.setHex(P.light);
+    sealBase.copy(new THREE.Color(...P.seal)); skySealBase.copy(new THREE.Color(...P.seal)); sparkMat.color.setRGB(...P.spark);
+    embers.material.color.setRGB(P.spark[0] * 0.8, P.spark[1] * 0.8, P.spark[2] * 0.8);
+    skySealOuter.material.color.setRGB(P.rune[0] * 1.2, P.rune[1] * 1.2, P.rune[2] * 1.2);
     pMat.color.setRGB(P.planet[0] / 140, P.planet[1] / 70, P.planet[2] / 200);
     bannerMat.emissive.setRGB(P.glow[0] * 0.06, P.glow[1] * 0.06, P.glow[2] * 0.06);
     sealOuter.material.color.setRGB(P.rune[0] * 1.2, P.rune[1] * 1.2, P.rune[2] * 1.2);
@@ -300,6 +390,16 @@ export function buildWorld(scene, renderer, quality) {
   W.update = (dt, t) => {
     sealMesh.rotation.z += dt * 0.05; sealOuter.rotation.z -= dt * 0.03;
     seal.position.y = 12.5 + Math.sin(t * 0.6) * 0.4; rose.rotation.z += dt * 0.15;
+    // sky seal: stately counter-rotation, the rose turning at its heart
+    skySealMesh.rotation.z += dt * 0.022; skySealOuter.rotation.z -= dt * 0.013;
+    skySeal.position.y = 33 + Math.sin(t * 0.4) * 1.2; skyRose.rotation.z += dt * 0.1;
+    const sp2 = 1 + Math.sin(t * 1.1 + 2) * 0.1; skySealMat.color.setRGB(skySealBase.r * sp2, skySealBase.g * sp2, skySealBase.b * sp2);
+    skyOrbiters.forEach((o, i) => { const a = t * 0.18 + i / 13 * Math.PI * 2; o.position.set(Math.cos(a) * 35, Math.sin(a) * 35, 0.8); o.rotation.y = t * 1.6 + i; });
+    moon2Halo.lookAt(0, 4, 0);
+    for (const g of shards) { g.position.y = g.userData.by + Math.sin(t * g.userData.sp + g.userData.ph) * 1.1; g.rotation.y += dt * g.userData.rs; }
+    const epA = eg.attributes.position.array;
+    for (let i = 0; i < EN; i++) { epA[i * 3] += Math.sin(t * 0.4 + ev[i * 2 + 1]) * dt * 0.7 + dt * 0.35; epA[i * 3 + 1] += Math.sin(t * ev[i * 2] + ev[i * 2 + 1]) * dt * 0.45 + dt * 0.12; epA[i * 3 + 2] += Math.cos(t * 0.33 + ev[i * 2 + 1]) * dt * 0.7; if (epA[i * 3 + 1] > 24) epA[i * 3 + 1] = 0.2; if (epA[i * 3] > 48) epA[i * 3] = -48; }
+    eg.attributes.position.needsUpdate = true;
     runes.rotation.z += dt * 0.015; runes2.rotation.z -= dt * 0.06;
     const pul = 1 + Math.sin(t * 1.3) * 0.12; sealMat.color.setRGB(sealBase.r * pul, sealBase.g * pul, sealBase.b * pul);
     planet.rotation.y += dt * 0.01;

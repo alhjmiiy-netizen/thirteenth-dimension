@@ -1,6 +1,6 @@
 // ---------------- static game data ----------------
 export const PALETTES = {
-  azure:   { name: 'azure',   zenith: [2, 6, 20],  horizon: [14, 51, 140], neb: [60, 90, 255], neb2: [140, 50, 200], glow: [0.3, 1.4, 3.2], glow2: [0.3, 1.5, 2.2], rune: [0.1, 0.45, 1.2], crystal: 0x48d8ff, crystalE: 0x18a0ff, light: 0x3ab8ff, fog: 0x030a1e, planet: [120, 60, 190], seal: [0.35, 1.1, 2.6], spark: [0.6, 1.4, 2.4], floor: [8, 10, 20] },
+  azure:   { name: 'azure',   zenith: [1, 4, 17],  horizon: [9, 42, 148], neb: [60, 90, 255], neb2: [140, 50, 200], glow: [0.3, 1.4, 3.2], glow2: [0.3, 1.5, 2.2], rune: [0.1, 0.45, 1.2], crystal: 0x48d8ff, crystalE: 0x18a0ff, light: 0x3ab8ff, fog: 0x030a1e, planet: [120, 60, 190], seal: [0.35, 1.1, 2.6], spark: [0.6, 1.4, 2.4], floor: [6, 9, 22] },
   crimson: { name: 'crimson', zenith: [16, 3, 8],  horizon: [120, 26, 40], neb: [255, 70, 60], neb2: [255, 140, 40], glow: [3.0, 0.7, 0.35], glow2: [2.4, 0.9, 0.4], rune: [1.1, 0.25, 0.12], crystal: 0xff6a3a, crystalE: 0xd02a10, light: 0xff5a2a, fog: 0x14040a, planet: [200, 70, 50], seal: [2.6, 0.7, 0.4], spark: [2.4, 0.9, 0.4], floor: [16, 8, 10] },
   violet:  { name: 'violet',  zenith: [8, 3, 20],  horizon: [70, 30, 140], neb: [170, 80, 255], neb2: [40, 220, 200], glow: [1.6, 0.6, 3.2], glow2: [0.6, 2.2, 2.0], rune: [0.6, 0.25, 1.3], crystal: 0xb27bff, crystalE: 0x7a2aff, light: 0xa060ff, fog: 0x0b0418, planet: [60, 170, 160], seal: [1.6, 0.7, 2.8], spark: [1.4, 0.8, 2.6], floor: [12, 8, 20] },
   seal:    { name: 'seal',    zenith: [2, 4, 14],  horizon: [20, 40, 110], neb: [80, 120, 255], neb2: [255, 60, 90], glow: [0.4, 1.4, 3.2], glow2: [2.6, 1.6, 0.6], rune: [0.15, 0.5, 1.3], crystal: 0x7fe8ff, crystalE: 0x1a8cff, light: 0x5fc8ff, fog: 0x02050f, planet: [150, 60, 200], seal: [0.5, 1.3, 3.0], spark: [2.2, 0.5, 0.7], floor: [6, 8, 16] },
@@ -83,5 +83,6 @@ export const TUTORIAL = [
   { id: 'combo', touch: 'Hold attack for a 3-hit combo. The third hit unleashes lightning', desk: 'Hold J for a 3-hit combo. The third hit unleashes lightning' },
   { id: 'dodge', touch: 'Tap the wing button to dodge. You are invincible mid-dodge', desk: 'Press Space to dodge. You are invincible mid-dodge' },
   { id: 'skill', touch: 'Use Lightning Burst (top skill button)', desk: 'Press K to cast Lightning Burst' },
-  { id: 'camera', touch: 'Drag anywhere on the right side to turn the camera. Clear the stage!', desk: 'Drag the mouse or use ← → to turn the camera. Tab locks on. Clear the stage!' },
+  { id: 'camera', touch: 'Drag anywhere on the right side to turn the camera. Tab locks on', desk: 'Drag the mouse or use ← → to turn the camera. Tab locks on' },
+  { id: 'fly', touch: 'Tap the green wing-arrow button to FLY — tap again to land. Flying costs nothing! Hold it in the air to rise; the down button descends. Clear the stage!', desk: 'Press F to FLY — F again to land. Flying costs nothing! In the air: Space rises, Shift descends. Clear the stage!' },
 ];

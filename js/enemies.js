@@ -8,14 +8,14 @@ function shared() {
   const rim = (mat, c, p) => { mat.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
     totalEmissiveRadiance += vec3(${c}) * pow(1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0), ${p});`); }; return mat; };
   G = {
-    armor: rim(new THREE.MeshStandardMaterial({ color: 0x2a3042, metalness: 0.8, roughness: 0.3, envMapIntensity: 2.6, emissive: 0x0a0d18 }), '0.75, 0.1, 0.14', '4.0'),
-    armor2: rim(new THREE.MeshStandardMaterial({ color: 0x12141c, metalness: 0.75, roughness: 0.4, envMapIntensity: 2 }), '0.45, 0.06, 0.1', '4.0'),
-    gold: rim(new THREE.MeshStandardMaterial({ color: 0x4a3a20, metalness: 0.9, roughness: 0.3, envMapIntensity: 2 }), '0.6, 0.2, 0.05', '3.0'),
-    trim: new THREE.MeshStandardMaterial({ color: 0x3a1418, metalness: 0.8, roughness: 0.3, emissive: 0x500808, emissiveIntensity: 1 }),
+    armor: rim(new THREE.MeshStandardMaterial({ color: 0x263252, metalness: 0.8, roughness: 0.28, envMapIntensity: 2.6, emissive: 0x0c1226 }), '0.75, 0.1, 0.14', '4.0'),
+    armor2: rim(new THREE.MeshStandardMaterial({ color: 0x141a2c, metalness: 0.75, roughness: 0.38, envMapIntensity: 2 }), '0.45, 0.06, 0.1', '4.0'),
+    gold: rim(new THREE.MeshStandardMaterial({ color: 0x6b5327, metalness: 0.9, roughness: 0.3, envMapIntensity: 2.2 }), '0.6, 0.2, 0.05', '3.0'),
+    trim: new THREE.MeshStandardMaterial({ color: 0x3a1418, metalness: 0.8, roughness: 0.3, emissive: 0x500808, emissiveIntensity: 1.5 }),
     red: new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.5, 0.3) }),
     redSoft: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.15, 0.1), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }),
-    robe: rim(new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.7, metalness: 0.2, side: THREE.DoubleSide }), '0.5, 0.08, 0.2', '3.0'),
-    fur: rim(new THREE.MeshStandardMaterial({ color: 0x0e0c12, roughness: 0.8, metalness: 0.1, flatShading: true }), '0.8, 0.12, 0.1', '3.0'),
+    robe: rim(new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.7, metalness: 0.2, side: THREE.DoubleSide }), '0.55, 0.12, 0.3', '3.0'),
+    fur: rim(new THREE.MeshStandardMaterial({ color: 0x131022, roughness: 0.8, metalness: 0.1, flatShading: true }), '0.8, 0.12, 0.1', '3.0'),
     bone: new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.6 }),
     flash: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.45, 0.9) }),
     frost: new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x2a8cff, emissiveIntensity: 0.6, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.85 }),

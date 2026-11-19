@@ -84,6 +84,32 @@ export function sealTexture() {
   return tex(c);
 }
 
+// Sky seal: same geometry language as sealTexture, but the centre is left open
+// (a 3D rose sits there) and the "13" rides above the rose, as in the concept art.
+export function sealSkyTexture() {
+  const S = 2048, [c, g] = cv(S); g.translate(S / 2, S / 2);
+  const R = S / 2 - 30;
+  g.strokeStyle = '#bff3ff'; g.fillStyle = '#e6fbff';
+  g.shadowColor = '#5fd8ff'; g.shadowBlur = 18;
+  [[1, 10], [0.965, 3], [0.88, 6], [0.855, 2], [0.7, 4], [0.675, 2]].forEach(([r, w]) => ring(g, R * r, w));
+  runeText(g, R * 0.92, 64, 44); runeText(g, R * 0.78, 54, 32, 0.05);
+  // hexagram
+  g.lineWidth = 9;
+  for (const off of [0, Math.PI]) { g.beginPath(); for (let i = 0; i <= 3; i++) { const a = off + i / 3 * Math.PI * 2; const x = Math.sin(a) * R * 0.855, y = -Math.cos(a) * R * 0.855; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  g.lineWidth = 4; poly(g, R * 0.495, 6, Math.PI / 6);
+  // 13-point star ring (stays outside the open centre)
+  g.lineWidth = 3; poly(g, R * 0.675, 13, 0, 5);
+  // inner broken ring around the rose
+  g.lineWidth = 4; g.setLineDash([R * 0.09, R * 0.05]); ring(g, R * 0.40, 4); g.setLineDash([]);
+  // ornate arcs
+  g.lineWidth = 3;
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + Math.PI / 6; g.beginPath(); g.arc(Math.sin(a) * R * 0.6, -Math.cos(a) * R * 0.6, R * 0.09, 0, Math.PI * 2); g.stroke(); g.font = '70px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(RUNES[i * 3], Math.sin(a) * R * 0.6, -Math.cos(a) * R * 0.6); }
+  // the 13, enthroned above the rose
+  g.shadowBlur = 44; g.font = `800 ${R * 0.30}px Cinzel, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 6; g.strokeText('13', 0, -R * 0.545); g.fillText('13', 0, -R * 0.545);
+  return tex(c);
+}
+
 // Glow ring under the hero
 export function heroRing(fill = true) {
   const S = 512, [c, g] = cv(S); g.translate(S / 2, S / 2);
@@ -143,6 +169,46 @@ export function coatEmissive(withEmblem = true) {
   return tex(c);
 }
 
+// Coat cloth: greyscale weave + seams, used as a roughnessMap so the black
+// coat catches light unevenly like heavy fabric instead of flat plastic.
+export function coatCloth() {
+  const S = 256, [c, g] = cv(S);
+  g.fillStyle = '#8c8c8c'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 9000; i++) { const v = 100 + Math.random() * 110 | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * S, Math.random() * S, 2, 1); }
+  for (let x = 0; x < S; x += 3) { g.fillStyle = `rgba(60,60,60,${0.05 + (x % 9 === 0 ? 0.08 : 0)})`; g.fillRect(x, 0, 1, S); }
+  for (let y = 0; y < S; y += 3) { g.fillStyle = 'rgba(200,200,200,0.05)'; g.fillRect(0, y, S, 1); }
+  g.fillStyle = 'rgba(50,50,50,0.35)'; g.fillRect(0, S * 0.32, S, 3); g.fillRect(0, S * 0.78, S, 3);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+// Coat back panel: black cloth with the glowing "13" sigil enthroned in a
+// diamond, as in the concept art. Drawn white-hot so it can serve as both
+// map (dimmed by material colour) and emissiveMap (tinted by emissive).
+export function coatBackTexture() {
+  const W = 256, H = 384, [c, g] = cv(W, H);
+  g.fillStyle = '#0a0c13'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(140,170,230,${Math.random() * 0.05})`; g.fillRect(Math.random() * W, Math.random() * H, 2, 1); }
+  for (let x = 8; x < W; x += 16) { g.fillStyle = 'rgba(120,160,230,0.05)'; g.fillRect(x, 0, 1, H); }
+  const cx = W / 2, cy = H * 0.47;
+  g.strokeStyle = '#dff6ff'; g.fillStyle = '#eafcff';
+  g.shadowColor = '#39b6ff'; g.shadowBlur = 22;
+  // diamond sigil
+  g.lineWidth = 5; g.beginPath(); g.moveTo(cx, cy - 92); g.lineTo(cx + 74, cy); g.lineTo(cx, cy + 92); g.lineTo(cx - 74, cy); g.closePath(); g.stroke();
+  g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy - 106); g.lineTo(cx + 86, cy); g.lineTo(cx, cy + 106); g.lineTo(cx - 86, cy); g.closePath(); g.stroke();
+  // the 13
+  g.font = '800 96px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowBlur = 30; g.fillText('13', cx, cy + 6);
+  // corner ticks + rune dots
+  g.shadowBlur = 12; g.font = '26px serif';
+  g.fillText(RUNES[4], cx, cy - 128); g.fillText(RUNES[17], cx, cy + 130);
+  for (const s of [-1, 1]) { g.beginPath(); g.arc(cx + s * 104, cy, 5, 0, 7); g.fill(); }
+  // glow seams running down from the sigil
+  g.lineWidth = 3; g.shadowBlur = 14;
+  for (const s of [-1, 1]) { g.beginPath(); g.moveTo(cx + s * 30, cy + 108); g.lineTo(cx + s * 30, H - 26); g.stroke(); g.beginPath(); g.arc(cx + s * 30, H - 20, 4, 0, 7); g.fill(); }
+  g.fillRect(14, H - 12, W - 28, 5);
+  const t = tex(c); return t;
+}
+
 // Stylized HUD portrait of the hero
 export function drawPortrait(canvas) {
   const g = canvas.getContext('2d'), S = canvas.width; g.clearRect(0, 0, S, S);
@@ -178,7 +244,7 @@ export function drawPortrait(canvas) {
 }
 
 // Skill icons
-const ICOL = { atk: ['#3a9cff', '#06204a'], lightning: ['#7fe8ff', '#06264a'], nova: ['#bff6ff', '#0a2a4a'], blades: ['#4dffd2', '#04262a'], vortex: ['#a46bff', '#1a0640'], gale: ['#5dff8a', '#06301a'], judgment: ['#ffe27a', '#3a2604'], pot: ['#ff5a7e', '#2a0412'], dodge: ['#9fe8ff', '#062040'], lock: ['#ff6a5a', '#2a0606'], empty: ['#2a3a5a', '#060c1a'] };
+const ICOL = { atk: ['#3a9cff', '#06204a'], lightning: ['#7fe8ff', '#06264a'], nova: ['#bff6ff', '#0a2a4a'], blades: ['#4dffd2', '#04262a'], vortex: ['#a46bff', '#1a0640'], gale: ['#5dff8a', '#06301a'], judgment: ['#ffe27a', '#3a2604'], pot: ['#ff5a7e', '#2a0412'], dodge: ['#9fe8ff', '#062040'], lock: ['#ff6a5a', '#2a0606'], fly: ['#5dff8a', '#06301a'], sink: ['#8affc1', '#04281a'], empty: ['#2a3a5a', '#060c1a'] };
 export function drawIcon(canvas, kind) {
   const g = canvas.getContext('2d'), S = canvas.width, c = S / 2; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, S, S);
   const cols = ICOL[kind] || ICOL.empty;
@@ -210,6 +276,13 @@ export function drawIcon(canvas, kind) {
     g.fillStyle = '#fff'; g.beginPath(); g.arc(-S * 0.07, 0, S * 0.05, 0, 7); g.fill();
   } else if (kind === 'dodge') {
     g.beginPath(); g.moveTo(-S * 0.3, S * 0.18); g.quadraticCurveTo(-S * 0.1, -S * 0.34, S * 0.34, -S * 0.3); g.quadraticCurveTo(S * 0.1, -S * 0.12, S * 0.26, -S * 0.04); g.quadraticCurveTo(S * 0.02, 0, S * 0.18, S * 0.1); g.quadraticCurveTo(-S * 0.06, S * 0.08, -S * 0.3, S * 0.18); g.fill();
+  } else if (kind === 'fly') {
+    // spread wing + rising chevron
+    g.beginPath(); g.moveTo(-S * 0.34, S * 0.1); g.quadraticCurveTo(-S * 0.12, -S * 0.3, S * 0.36, -S * 0.26); g.quadraticCurveTo(S * 0.08, -S * 0.08, S * 0.3, 0); g.quadraticCurveTo(S * 0.02, -S * 0.02, S * 0.2, S * 0.08); g.quadraticCurveTo(-S * 0.08, S * 0.02, -S * 0.34, S * 0.1); g.fill();
+    L([[-0.14, 0.3], [0, 0.16], [0.14, 0.3]], 0.055);
+  } else if (kind === 'sink') {
+    g.beginPath(); g.moveTo(-S * 0.34, -S * 0.16); g.quadraticCurveTo(-S * 0.12, -S * 0.02, S * 0.36, 0.02); g.quadraticCurveTo(S * 0.08, 0.06, S * 0.3, 0.14); g.quadraticCurveTo(S * 0.02, 0.12, S * 0.2, 0.2); g.quadraticCurveTo(-S * 0.08, 0.14, -S * 0.34, -S * 0.16); g.fill();
+    L([[-0.14, -0.3], [0, -0.16], [0.14, -0.3]], 0.055);
   } else if (kind === 'lock') {
     g.lineWidth = S * 0.045; g.beginPath(); g.arc(0, 0, S * 0.24, 0, 7); g.stroke();
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; L([[Math.cos(a) * 0.14, Math.sin(a) * 0.14], [Math.cos(a) * 0.38, Math.sin(a) * 0.38]], 0.04); }

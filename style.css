@@ -64,6 +64,15 @@ body.desk #skills small{display:block}
 #potBtn{right:calc(33.5*var(--u));bottom:calc(1*var(--u));width:calc(8.5*var(--u));height:calc(8.5*var(--u));border-color:#ff9ab0!important;box-shadow:0 0 10px #ff3d6e!important}
 #lockBtn{right:calc(2*var(--u));bottom:calc(34*var(--u));width:calc(7.5*var(--u));height:calc(7.5*var(--u));border-color:#ff9a8a!important;box-shadow:0 0 8px #ff3d2e!important}
 #lockBtn.on{box-shadow:0 0 18px #ff3d2e,0 0 30px #ff3d2e!important;filter:brightness(1.4)}
+#flyBtn{right:calc(33.5*var(--u));bottom:calc(11.8*var(--u));width:calc(9.5*var(--u));height:calc(9.5*var(--u));border-color:#8affc1!important;box-shadow:0 0 12px #22cc66!important}
+#flyBtn.on{box-shadow:0 0 20px #2eff7a,0 0 34px #22cc66!important;filter:brightness(1.45)}
+#sinkBtn{right:calc(33.5*var(--u));bottom:calc(22.5*var(--u));width:calc(8.5*var(--u));height:calc(8.5*var(--u));border-color:#8affc1!important;box-shadow:0 0 8px #22cc66!important;opacity:.35;pointer-events:none!important;transition:opacity .25s}
+body.flying #sinkBtn{opacity:1;pointer-events:auto!important}
+/* touch controls exist only on touch devices — desktop gets a clean screen */
+body.desk #stick,body.desk #skills{display:none}
+/* portrait hint: small, dismissible, never blocking */
+#portHint{display:none;position:absolute;left:50%;bottom:calc(30*var(--u));transform:translateX(-50%);padding:calc(1*var(--u)) calc(2.2*var(--u));background:#0b2a5acc;border:1px solid #6fd8ff;border-radius:calc(1.4*var(--u));font:600 calc(2.2*var(--u)) Rajdhani;color:#dff6ff;pointer-events:auto;cursor:pointer;white-space:nowrap;z-index:6}
+@media (orientation:portrait) and (pointer:coarse){body.instage:not(.noph) #portHint{display:block}}
 #potBtn b{position:absolute;left:0;right:0;bottom:4%;text-align:center;font:700 calc(2*var(--u)) Rajdhani;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000}
 body.desk #potBtn b{bottom:auto;top:4%}
 .sk .cd{position:absolute;inset:0;border-radius:50%;background:conic-gradient(#000c var(--p,0%),transparent 0)}
@@ -110,9 +119,6 @@ body.desk #potBtn b{bottom:auto;top:4%}
 .btn:active{transform:scale(.96)}
 .help{font:500 calc(2.1*var(--u)) Rajdhani;color:#8fc4e8;line-height:1.5;max-width:90vw}
 .help b{color:#dff8ff}
-#rotate{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:#020611;color:#bfefff;font:700 20px Rajdhani;text-align:center;gap:12px}
-#rotate div{font-size:60px;color:#5fe6ff;text-shadow:0 0 14px #1a8cff;animation:spin 3s linear infinite}
-@media (orientation:portrait) and (pointer:coarse){#rotate{display:flex}}
 #loading{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:#02050f;font:700 22px Cinzel,serif;color:#7fe3ff;text-shadow:0 0 10px #1a8cff;letter-spacing:.1em}
 #loading.gone{opacity:0;pointer-events:none;transition:opacity .6s}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -259,3 +265,18 @@ body.desk #potBtn b{bottom:auto;top:4%}
 #toast.on{opacity:1}
 #loading{flex-direction:column;gap:10px}#loading small{font:500 14px Rajdhani;color:#6f9cc8;letter-spacing:.2em}
 @media (max-aspect-ratio:4/3){.stageCard{width:44%}}
+/* ---------- portrait phones: fully playable, no rotate wall ---------- */
+@media (orientation:portrait){
+  :root{--u:min(1.15vh,1.05vw)}
+  #logoSmall{display:none}
+  #objPanel{top:calc(24*var(--u));white-space:normal;max-width:48vw;min-width:0}
+  #combo{top:calc(38*var(--u))}
+  #bossBar{width:88vw;top:calc(17*var(--u))}
+  #tutBox{max-width:92vw;top:calc(30*var(--u))}
+  #expWrap{width:92vw}
+  .mapBody{flex-direction:column}
+  .stageCard{width:100%;max-height:42%}
+  .sanBody{flex-direction:column}
+  .heroInfo{width:100%}
+  #banner{font-size:calc(5.4*var(--u))}
+}

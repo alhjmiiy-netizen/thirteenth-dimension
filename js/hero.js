@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { coatEmissive, heroRing } from './textures.js';
+import { coatEmissive, heroRing, coatCloth, coatBackTexture } from './textures.js';
 
 const PAL = {
   hero: { glow: [0.35, 1.5, 3.2], soft: [0.25, 1.1, 2.4], eye: [1, 3, 4], mem: 0x0fb83a, memE: 0x0a9a2c, memEdge: 0x7dff9a, hair: 0x06070c, streak: 0x1a6cff, skin: 0xb88a78, sword: [0.6, 2.2, 4.0], coat: 0x0a0c14, light: 0x48c8ff },
@@ -21,28 +21,35 @@ function wing(side, mats, P) {
   shape.lineTo(0.2, -0.7);
   const geo = new THREE.ShapeGeometry(shape, 8);
   // vertex colours: deep green at the arm, bright toward the scalloped edge
-  const pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), cA = new THREE.Color(P.mem).multiplyScalar(0.35), cB = new THREE.Color(P.mem), cC = new THREE.Color(P.memEdge);
+  const pos = geo.attributes.position, cols = new Float32Array(pos.count * 3), cA = new THREE.Color(P.mem).multiplyScalar(0.2), cB = new THREE.Color(P.mem).multiplyScalar(1.05), cC = new THREE.Color(P.memEdge);
   for (let i = 0; i < pos.count; i++) {
     const d = Math.hypot(pos.getX(i) - W.x, pos.getY(i) - W.y) / 3.2;
-    const c = d < 0.6 ? cA.clone().lerp(cB, d / 0.6) : cB.clone().lerp(cC, Math.min(1, (d - 0.6) / 0.5) * 0.5);
+    const c = d < 0.6 ? cA.clone().lerp(cB, d / 0.6) : cB.clone().lerp(cC, Math.min(1, (d - 0.6) / 0.5) * 0.9);
     cols.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   g.add(new THREE.Mesh(geo, mats.membrane));
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edge), 90, 0.022, 4, false), mats.edge));
-  const bone = (a, b, r, mat = mats.bone) => {
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edge), 110, 0.04, 4, false), mats.edge));
+  const bone = (a, b, r, mat = mats.bone, z = 0.025) => {
     const len = a.distanceTo(b), m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.4, r, len, 6), mat);
-    m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, 0.025); m.rotation.z = Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2; g.add(m);
+    m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, z); m.rotation.z = Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2; g.add(m);
   };
   bone(new THREE.Vector2(0, 0.1), W, 0.12);
   tips.forEach(t => bone(W, t, 0.065));
-  // veins
-  tips.forEach((t, i) => { if (i) { const mid = tips[i - 1].clone().add(t).multiplyScalar(0.5).sub(W).multiplyScalar(0.7).add(W); bone(W, mid, 0.018, mats.vein); } });
-  const spikeGeo = new THREE.ConeGeometry(0.075, 0.6, 5);
+  // veins: glowing blue energy channels running from the shoulder joint to every
+  // tip, riding proud of the membrane (both faces) so they read as light, not struts
+  tips.forEach(t => { bone(W, t, 0.034, mats.vein, 0.05); bone(W, t, 0.034, mats.vein, -0.05); });
+  tips.forEach((t, i) => { if (i) { const mid = tips[i - 1].clone().add(t).multiplyScalar(0.5).sub(W).multiplyScalar(0.7).add(W); bone(W, mid, 0.02, mats.vein, 0.05); } });
+  const spikeGeo = new THREE.ConeGeometry(0.09, 0.78, 5);
   const addSpike = (p, ang, s = 1, mat = mats.bone) => { const sp = new THREE.Mesh(spikeGeo, mat); sp.position.set(p.x, p.y, 0.03); sp.rotation.z = ang; sp.scale.setScalar(s); g.add(sp); };
-  addSpike(new THREE.Vector2(W.x + 0.1, W.y + 0.35), -0.25, 1.6); addSpike(new THREE.Vector2(0.8, 1.0), 0.35, 1.1); addSpike(new THREE.Vector2(1.15, 1.2), 0.1, 0.9);
-  tips.forEach(t => { const d = t.clone().sub(W).normalize(); addSpike(t.clone().add(d.clone().multiplyScalar(0.25)), Math.atan2(d.y, d.x) - Math.PI / 2, 1.0); });
-  addSpike(new THREE.Vector2(W.x, W.y + 0.25), 0, 0.8, mats.edge);
+  // the leading edge bristles with glowing storm-crystals, as in the concept art
+  addSpike(new THREE.Vector2(W.x + 0.1, W.y + 0.35), -0.25, 1.9, mats.edge); addSpike(new THREE.Vector2(0.8, 1.0), 0.35, 1.3, mats.edge); addSpike(new THREE.Vector2(1.15, 1.2), 0.1, 1.1, mats.edge);
+  addSpike(new THREE.Vector2(0.42, 0.58), 0.55, 0.8, mats.edge); addSpike(new THREE.Vector2(2.6, 1.85), -0.1, 0.9, mats.edge);
+  // a crystal knuckle burning at the wing joint
+  const knuckle = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), mats.edge); knuckle.position.set(W.x, W.y, 0.04); knuckle.scale.set(1, 1.7, 1); g.add(knuckle);
+  // glowing hooks at every wingtip
+  tips.forEach(t => { const d = t.clone().sub(W).normalize(); addSpike(t.clone().add(d.clone().multiplyScalar(0.28)), Math.atan2(d.y, d.x) - Math.PI / 2, 1.15, mats.edge); });
+  addSpike(new THREE.Vector2(W.x, W.y + 0.25), 0, 0.9, mats.edge);
   if (side < 0) g.scale.x = -1;
   return g;
 }
@@ -53,8 +60,9 @@ export function buildHero(scene, opts = {}) {
   const body = new THREE.Group(); root.add(body);
   const GL = new THREE.Color(...P.glow);
   const em = coatEmissive();
-  const coatMat = new THREE.MeshStandardMaterial({ color: P.coat, roughness: 0.45, metalness: 0.5, emissive: new THREE.Color(...P.soft), emissiveMap: em, emissiveIntensity: 0.55, side: THREE.DoubleSide });
-  const skirtMat = coatMat.clone(); skirtMat.emissiveMap = coatEmissive(false); skirtMat.emissiveIntensity = 0.32;
+  const cloth = coatCloth();
+  const coatMat = new THREE.MeshStandardMaterial({ color: P.coat, roughness: 0.9, roughnessMap: cloth, metalness: 0.3, emissive: new THREE.Color(...P.soft), emissiveMap: em, emissiveIntensity: 0.6, side: THREE.DoubleSide });
+  const skirtMat = coatMat.clone(); skirtMat.emissiveMap = coatEmissive(false); skirtMat.emissiveIntensity = 0.38;
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x07080d, roughness: 0.5, metalness: 0.45 });
   const leatherMat = new THREE.MeshStandardMaterial({ color: 0x14151c, roughness: 0.35, metalness: 0.6 });
   const skinMat = new THREE.MeshStandardMaterial({ color: P.skin, roughness: 0.7 });
@@ -62,10 +70,10 @@ export function buildHero(scene, opts = {}) {
   const hairBlue = new THREE.MeshStandardMaterial({ color: 0x0a1a3a, emissive: P.streak, emissiveIntensity: 1.4, roughness: 0.4 });
   const glow = new THREE.MeshBasicMaterial({ color: GL });
   const mats = {
-    membrane: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, emissive: P.memE, emissiveIntensity: 0.35, roughness: 0.55, transparent: true, opacity: 0.94, side: THREE.DoubleSide }),
-    edge: new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.soft).multiplyScalar(0.8) }),
+    membrane: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, emissive: P.memE, emissiveIntensity: 0.45, roughness: 0.45, transparent: true, opacity: 0.94, side: THREE.DoubleSide }),
+    edge: new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.soft).multiplyScalar(1.0) }),
     bone: new THREE.MeshStandardMaterial({ color: 0x050609, roughness: 0.4, metalness: 0.5, envMapIntensity: 0.3 }),
-    vein: new THREE.MeshStandardMaterial({ color: 0x031208, roughness: 0.6, transparent: true, opacity: 0.6 }),
+    vein: new THREE.MeshBasicMaterial({ color: new THREE.Color(...P.soft).multiplyScalar(0.8), transparent: true, opacity: 0.95 }),
   };
   const M = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
 
@@ -83,8 +91,14 @@ export function buildHero(scene, opts = {}) {
   }
   // ---- torso ----
   const torso = new THREE.Group(); torso.position.y = 1.2; body.add(torso);
+  torso.scale.set(1.06, 1.02, 0.95); // broader shoulders, shallower chest: an anime silhouette
   const chestPts = [[0.22, 0], [0.26, 0.12], [0.29, 0.35], [0.31, 0.55], [0.24, 0.72], [0.12, 0.78]].map(p => new THREE.Vector2(...p));
   M(new THREE.LatheGeometry(chestPts, 16), coatMat, torso);
+  // the coat's back panel: black cloth bearing the glowing "13" sigil, worn
+  // proud of the torso so it reads from behind in any light (mantle covers its top)
+  const backTex = coatBackTexture();
+  const backMat = new THREE.MeshStandardMaterial({ map: backTex, emissive: new THREE.Color(...P.soft), emissiveMap: backTex, emissiveIntensity: 1.7, roughness: 0.85, roughnessMap: cloth, metalness: 0.2, side: THREE.DoubleSide });
+  M(new THREE.CylinderGeometry(0.335, 0.30, 0.62, 12, 1, true, Math.PI - 0.75, 1.5), backMat, torso, 0, 0.30, 0);
   // mantle over shoulders
   const mantle = M(new THREE.CylinderGeometry(0.3, 0.42, 0.28, 16, 1, true, 0, Math.PI * 2), coatMat, torso, 0, 0.62, -0.01); mantle.scale.z = 0.8;
   M(new THREE.TorusGeometry(0.42, 0.018, 6, 24), glow, torso, 0, 0.48, 0).rotation.x = Math.PI / 2;
@@ -107,6 +121,8 @@ export function buildHero(scene, opts = {}) {
     const f = new THREE.Group(); f.position.y = 1.25; f.rotation.y = a;
     const len = i === 3 ? 1.25 : (i === 2 || i === 4 ? 1.15 : 1.0);
     M(new THREE.CylinderGeometry(0.25, 0.48, len, 6, 1, true, -Math.PI / 6 - 0.02, Math.PI / 3 + 0.04), skirtMat, f, 0, -len / 2, 0);
+    // the long centre tail of the coat, hanging over the back flap like the art
+    if (i === 3) M(new THREE.PlaneGeometry(0.44, len * 0.98, 1, 4), skirtMat, f, 0, -len * 0.49, 0.5);
     // hem glow
     const hem = M(new THREE.TorusGeometry(0.48, 0.012, 4, 8, Math.PI / 3), glow, f, 0, -len + 0.01, 0); hem.rotation.set(Math.PI / 2, 0, Math.PI / 2 - Math.PI / 6);
     body.add(f); flaps.push({ f, i, v: 0, a: 0 });
@@ -147,7 +163,11 @@ export function buildHero(scene, opts = {}) {
     M(new THREE.BoxGeometry(0.07, 0.014, 0.014), hairMat, head, s * 0.058, 0.11, 0.142).rotation.z = -s * 0.28;
     M(new THREE.BoxGeometry(0.01, 0.07, 0.01), glow, head, s * 0.085, 0.0, 0.13).rotation.z = s * 0.35;
     M(new THREE.BoxGeometry(0.008, 0.04, 0.01), glow, head, s * 0.065, -0.01, 0.138).rotation.z = s * 0.2;
-    const ear = M(new THREE.ConeGeometry(0.035, 0.2, 4), skinMat, head, s * 0.155, 0.07, -0.01); ear.rotation.z = -s * 1.25; ear.rotation.y = s * 0.35;
+    // beast ears: tall, dark-furred, tipped and lined with the storm's glow
+    const earG = new THREE.Group(); earG.position.set(s * 0.105, 0.21, -0.01); earG.rotation.z = -s * 0.30; earG.rotation.x = -0.07; head.add(earG);
+    M(new THREE.ConeGeometry(0.058, 0.32, 5), hairMat, earG, 0, 0.05, 0);
+    M(new THREE.ConeGeometry(0.030, 0.20, 4), glow, earG, 0, 0.01, 0.032);
+    M(new THREE.SphereGeometry(0.016, 6, 5), glow, earG, 0, 0.22, 0);
     // curved ridged horn
     const horn = new THREE.Group(); horn.position.set(s * 0.085, 0.18, 0.0); horn.rotation.set(-0.35, 0, -s * 0.45); head.add(horn);
     let parent = horn, r = 0.05;
@@ -176,7 +196,7 @@ export function buildHero(scene, opts = {}) {
   const wings = [];
   for (const s of [-1, 1]) {
     const piv = new THREE.Group(); piv.position.x = s * 0.12; wingRoot.add(piv);
-    const w = wing(s, mats, P); w.scale.set(s * 0.72, 0.72, 0.72); piv.add(w); wings.push({ piv, s });
+    const w = wing(s, mats, P); w.scale.set(s * 0.78, 0.78, 0.78); piv.add(w); wings.push({ piv, s, m: w, k: 0.78 });
   }
   // ---- ground ring + light + crackling lightning ----
   const ringMat = new THREE.MeshBasicMaterial({ map: heroRing(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(...P.soft).multiplyScalar(0.8) });
@@ -207,7 +227,7 @@ export function buildHero(scene, opts = {}) {
     { a: [-1.4, -1.2, -0.9, -0.3, -0.8], b: [-1.5, 0.9, 1.3, -0.1, 0.8] },
     { a: [-1.6, 0, 1.45, 0, 0], b: [-1.6, 0, 1.45, 0, 0] },
   ];
-  let t = 0, swordA = 0;
+  let t = 0, swordA = 0, flyPh = 0;
   const H = {
     root, ring, light, wings, body, torso, head, sword, P,
     update(dt, st) {
@@ -265,24 +285,43 @@ export function buildHero(scene, opts = {}) {
         for (const a of arms) { a.sh.rotation.set(0.2, 0, a.s * 0.25); a.el.rotation.x = -0.1; }
         head.rotation.x = 0.6 * dead; swordWant = 0;
       }
-      // coat tail spring physics
+      // ---- flight pose: body pitches into the wind, legs trail, coat streams ----
+      const fly = st.fly || 0, glide = st.glide || 0;
+      if (fly > 0.01 && st.atkIdx < 0 && !st.dash && !dead) {
+        body.rotation.x += fly * (0.16 + run * 0.4);
+        legs[0].hip.rotation.x += fly * 0.55; legs[1].hip.rotation.x += fly * 0.55;
+        legs[0].knee.rotation.x += fly * 0.4; legs[1].knee.rotation.x += fly * 0.4;
+        head.rotation.x -= fly * 0.18;
+      }
+      // coat tail spring physics (in flight the tails stream hard behind him)
       for (const fl of flaps) {
         const back = fl.i === 3 ? 1 : (fl.i === 2 || fl.i === 4) ? 0.7 : 0.3;
-        const target = -(run * 0.55 * back + (st.dash ? 0.9 * back : 0)) - Math.sin(t * 1.7 + fl.i) * 0.03 + (st.atkIdx === 2 ? -0.8 : 0) + (dead ? 0.3 : 0);
+        const target = -(run * 0.55 * back + (st.dash ? 0.9 * back : 0) + fly * 1.15 * back) - Math.sin(t * 1.7 + fl.i) * 0.03 - fly * Math.sin(t * 9 + fl.i * 1.7) * 0.06 * back + (st.atkIdx === 2 ? -0.8 : 0) + (dead ? 0.3 : 0);
         fl.v += ((target - fl.a) * 60 - fl.v * 9) * dt; fl.a += fl.v * dt; fl.f.rotation.x = fl.a;
       }
-      // wings: slow powerful flap; swept back while running/dashing; flared on attacks/casts
-      const flap = Math.sin(t * (2.0 + run * 2.6));
+      // wings: on the ground in combat they TUCK — swept back, folded behind the
+      // shoulders and shrunk — so they never block the view ahead. Their full
+      // concept-art span belongs to flight, idle and menus: there they spread
+      // to full size with a complete flap cycle, locking into a glide at speed.
+      if (fly > 0.02) flyPh += dt * (5.4 + (st.climb ? 2.4 : 0)) * (1 - glide * 0.55);
+      const flap = Math.sin(t * (2.0 + run * 2.6)), flapF = Math.sin(flyPh);
+      const tuck = (st.combat && !st.showcase) ? 1 : 0;
       for (const w of wings) {
-        w.piv.rotation.y = w.s * ((st.showcase ? 0.38 : 0.92) + run * 0.3 + wingFold * 0.6 - flare * 0.45 + flap * 0.14) + (dead ? w.s * 0.8 : 0);
-        w.piv.rotation.z = w.s * (0.02 + flap * 0.17 + flare * 0.2) - (dead ? w.s * 0.5 : 0);
-        w.piv.rotation.x = 0.12 + run * 0.2 + wingFold * 0.25;
+        const kWant = st.showcase ? 1.04 : (0.72 - tuck * 0.1) + fly * 0.3;
+        w.k += (kWant - w.k) * Math.min(1, dt * 5);
+        w.m.scale.set(w.s * w.k, w.k, w.k);
+        const yBase = (st.showcase ? 0.38 : 0.92) + run * 0.3 + wingFold * 0.6 + tuck * 0.5 * (1 - fly) - flare * 0.45 + flap * 0.14;
+        const yFly = 0.34 + glide * 0.3 + flapF * 0.1;
+        w.piv.rotation.y = w.s * (yBase * (1 - fly) + yFly * fly) + (dead ? w.s * 0.8 : 0);
+        const zAmp = 0.17 * (1 - fly) + fly * 0.6 * (1 - glide * 0.8);
+        w.piv.rotation.z = w.s * (0.02 + flap * 0.17 * (1 - fly) + flapF * zAmp + flare * 0.2 + fly * 0.08) - (dead ? w.s * 0.5 : 0);
+        w.piv.rotation.x = 0.12 + run * 0.2 + wingFold * 0.25 + tuck * 0.3 * (1 - fly) + fly * (0.22 + glide * 0.35);
       }
       // sword fade
       swordA += ((swordWant ? 1 : 0) - swordA) * Math.min(1, dt * (swordWant ? 14 : 2.5));
       sword.visible = swordA > 0.02; sword.scale.set(1, Math.max(0.01, swordA), 1); bladeMat.opacity = swordA;
-      ring.rotation.z += dt * 0.6; ring.visible = st.deadT < 0;
-      if (light) light.intensity = 4 + Math.sin(t * 13) * 1 + (st.atkIdx >= 0 ? 5 : 0);
+      ring.rotation.z += dt * 0.6; ring.visible = st.deadT < 0 && fly < 0.4;
+      if (light) light.intensity = 4 + Math.sin(t * 13) * 1 + (st.atkIdx >= 0 ? 5 : 0) + fly * 2;
       for (const b of bolts) { b.t -= dt; if (b.t <= 0) regen(b); if (st.deadT >= 0) b.l.visible = false; }
     }
   };
