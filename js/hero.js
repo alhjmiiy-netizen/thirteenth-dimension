@@ -20,7 +20,7 @@ function wing(side, mats) {
   const mem = new THREE.Mesh(new THREE.ShapeGeometry(shape, 6), mats.membrane); g.add(mem);
   // glowing blue trailing edge
   const curve = new THREE.CatmullRomCurve3(edge);
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.028, 4, false), mats.edge));
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.02, 4, false), mats.edge));
   // dark spiky bones
   const bone = (a, b, r) => {
     const len = a.distanceTo(b), m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.45, r, len, 6), mats.bone);
@@ -49,8 +49,8 @@ export function buildHero(scene) {
   const hairBlue = new THREE.MeshStandardMaterial({ color: 0x0a2a6a, emissive: 0x1a6cff, emissiveIntensity: 1.6, roughness: 0.4 });
   const glow = new THREE.MeshBasicMaterial({ color: BLUE });
   const mats = {
-    membrane: new THREE.MeshStandardMaterial({ color: 0x1fd44a, emissive: 0x12b838, emissiveIntensity: 0.55, roughness: 0.6, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false }),
-    edge: new THREE.MeshBasicMaterial({ color: BLUE }), bone: new THREE.MeshStandardMaterial({ color: 0x0b0c14, roughness: 0.35, metalness: 0.6 })
+    membrane: new THREE.MeshStandardMaterial({ color: 0x0fb83a, emissive: 0x0a9a2c, emissiveIntensity: 0.5, roughness: 0.55, transparent: true, opacity: 0.94, side: THREE.DoubleSide }),
+    edge: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.15, 0.8, 2.0) }), bone: new THREE.MeshStandardMaterial({ color: 0x050609, roughness: 0.4, metalness: 0.5, envMapIntensity: 0.3 })
   };
 
   // legs

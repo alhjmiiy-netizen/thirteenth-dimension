@@ -25,11 +25,11 @@ function poly(g, r, n, rot, step = 1) {
 // Wet dark stone tiles (color + roughness in one canvas each)
 export function tileTextures() {
   const S = 512, [c, g] = cv(S), [rc, rg] = cv(S);
-  g.fillStyle = '#0b1220'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#05080f'; g.fillRect(0, 0, S, S);
   rg.fillStyle = '#ffffff'; rg.fillRect(0, 0, S, S);
   const n = 4, ts = S / n;
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-    const l = 14 + Math.random() * 12, b = 30 + Math.random() * 14;
+    const l = 8 + Math.random() * 8, b = 16 + Math.random() * 10;
     g.fillStyle = `rgb(${l * 0.7},${l * 0.95},${b})`; g.fillRect(x * ts + 3, y * ts + 3, ts - 6, ts - 6);
     // puddles = low roughness
     const v = 70 + Math.random() * 90; rg.fillStyle = `rgb(${v},${v},${v})`; rg.fillRect(x * ts + 3, y * ts + 3, ts - 6, ts - 6);
@@ -85,10 +85,10 @@ export function sealTexture() {
 }
 
 // Glow ring under the hero
-export function heroRing() {
+export function heroRing(fill = true) {
   const S = 512, [c, g] = cv(S); g.translate(S / 2, S / 2);
   const gr = g.createRadialGradient(0, 0, 0, 0, 0, S / 2); gr.addColorStop(0, 'rgba(120,220,255,0.55)'); gr.addColorStop(0.5, 'rgba(40,140,255,0.15)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = gr; g.fillRect(-S, -S, S * 2, S * 2);
+  if (fill) { g.fillStyle = gr; g.fillRect(-S, -S, S * 2, S * 2); }
   g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = 8;
   ring(g, 240, 5); ring(g, 222, 2); runeText(g, 200, 26, 20); ring(g, 176, 3); poly(g, 170, 6, 0, 2); poly(g, 170, 6, Math.PI / 6, 2);
   return tex(c);

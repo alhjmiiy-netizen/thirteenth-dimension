@@ -23,7 +23,7 @@ export function makeFX(scene, quality) {
       const th = Math.random() * 6.28, ph = Math.acos(Math.random() * 2 - 1), s = speed * (0.3 + Math.random() * 0.7);
       vel[i * 3] = Math.sin(ph) * Math.cos(th) * s; vel[i * 3 + 1] = Math.abs(Math.cos(ph)) * s * up + Math.cos(ph) * s * (1 - up); vel[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * s;
       life[i] = maxLife[i] = lifeT * (0.5 + Math.random() * 0.5); grav[i] = g;
-      const b = 1.5 + Math.random() * 1.5; base[i * 3] = C.r * b; base[i * 3 + 1] = C.g * b; base[i * 3 + 2] = C.b * b;
+      const b = 0.9 + Math.random() * 1.1; base[i * 3] = C.r * b; base[i * 3 + 1] = C.g * b; base[i * 3 + 2] = C.b * b;
     }
   }
   function ringBurst(p, n, color, speed, y = 0.2) {
@@ -33,7 +33,7 @@ export function makeFX(scene, quality) {
       pos[i * 3] = p.x; pos[i * 3 + 1] = p.y + y; pos[i * 3 + 2] = p.z;
       vel[i * 3] = Math.cos(a) * speed; vel[i * 3 + 1] = Math.random() * 1.5; vel[i * 3 + 2] = Math.sin(a) * speed;
       life[i] = maxLife[i] = 0.5 + Math.random() * 0.3; grav[i] = 0;
-      base[i * 3] = C.r * 2.5; base[i * 3 + 1] = C.g * 2.5; base[i * 3 + 2] = C.b * 2.5;
+      base[i * 3] = C.r * 1.6; base[i * 3 + 1] = C.g * 1.6; base[i * 3 + 2] = C.b * 1.6;
     }
   }
 
@@ -45,13 +45,13 @@ export function makeFX(scene, quality) {
     const geo = new THREE.RingGeometry(radius * 0.45, radius, 32, 1, 0, Math.PI * 1.2);
     const uv = geo.attributes.uv, p = geo.attributes.position;
     for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getY(i), p.getX(i)); let u = (a < 0 ? a + Math.PI * 2 : a) / (Math.PI * 1.2); if (side < 0) u = 1 - u; const r = Math.hypot(p.getX(i), p.getY(i)); uv.setXY(i, u * Math.min(1, (r - radius * 0.45) / (radius * 0.55) * 1.6), 0.5); }
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: arcTex, color: new THREE.Color(color).multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: arcTex, color: new THREE.Color(color).multiplyScalar(1.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     m.position.copy(center); m.rotation.order = 'YXZ'; m.rotation.y = heading; m.rotation.x = -Math.PI / 2 + tilt; m.rotation.z = -Math.PI * 1.1;
     scene.add(m); items.push({ m, t: 0, life: 0.22, kind: 'arc', s0: 0.85 });
   }
-  const ringTex = heroRing();
+  const ringTex = heroRing(false);
   function shock(center, radius, color, life = 0.45) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: ringTex, color: new THREE.Color(color).multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: ringTex, color: new THREE.Color(color).multiplyScalar(1.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.copy(center); m.position.y = 0.08; scene.add(m);
     items.push({ m, t: 0, life, kind: 'shock', r: radius });
   }
@@ -109,7 +109,7 @@ export function makeFX(scene, quality) {
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]; it.t += dt; const k = it.t / it.life;
       if (k >= 1) { if (it.kind === 'vortex') vLight.intensity = 0; scene.remove(it.m); it.m.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); }); items.splice(i, 1); continue; }
-      if (it.kind === 'arc') { it.m.material.opacity = 1 - k; it.m.scale.setScalar(it.s0 + k * 0.4); }
+      if (it.kind === 'arc') { it.m.material.opacity = 0.85 * (1 - k); it.m.scale.setScalar(it.s0 + k * 0.4); }
       else if (it.kind === 'shock') { const s = it.r * (0.2 + 0.8 * Math.pow(k, 0.5)); it.m.scale.set(s, s, 1); it.m.material.opacity = 1 - k; }
       else if (it.kind === 'tele') { it.fill.scale.setScalar(k); it.m.material.opacity = 0.6 + Math.sin(it.t * 30) * 0.4; }
       else if (it.kind === 'bolt') { it.m.children.forEach(c => c.material.opacity = (1 - k) * (Math.random() < 0.8 ? 1 : 0.3)); }

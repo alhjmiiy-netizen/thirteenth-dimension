@@ -11,7 +11,7 @@ function shared() {
     trim: new THREE.MeshStandardMaterial({ color: 0x3a1418, metalness: 0.8, roughness: 0.3, emissive: 0x500808, emissiveIntensity: 1 }),
     red: new THREE.MeshBasicMaterial({ color: RED }),
     robe: new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.7, metalness: 0.2, side: THREE.DoubleSide }),
-    flash: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 3, 3.5) }),
+    flash: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.45, 0.9) }),
     box: new THREE.BoxGeometry(1, 1, 1),
     sph: new THREE.SphereGeometry(1, 12, 8),
     cone: new THREE.ConeGeometry(1, 1, 6),

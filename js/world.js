@@ -62,10 +62,10 @@ export function buildWorld(scene, renderer, quality) {
   scene.background = sky;
   const pm = new THREE.PMREMGenerator(renderer); const env = pm.fromEquirectangular(sky).texture; pm.dispose();
   scene.environment = env;
-  scene.environmentIntensity = 0.45;
-  scene.fog = new THREE.FogExp2(0x071a44, 0.0065);
+  scene.environmentIntensity = 0.35;
+  scene.fog = new THREE.FogExp2(0x030a1e, 0.004);
 
-  scene.add(new THREE.HemisphereLight(0x3a6dff, 0x050a18, 0.35));
+  scene.add(new THREE.HemisphereLight(0x3a6dff, 0x020408, 0.22));
   const moon = new THREE.DirectionalLight(0x9fc8ff, 0.9); moon.position.set(40, 60, -30); scene.add(moon);
 
   // ---- ringed planet (top-right of the default view) ----

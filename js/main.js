@@ -23,13 +23,13 @@ const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
 let pr = Math.min(devicePixelRatio, quality.low ? 1.25 : (isTouch ? 1.5 : 1.75));
 renderer.setPixelRatio(pr);
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 800);
 const camFill = new THREE.DirectionalLight(0xbcd4ff, 1.1); camFill.position.set(0.3, 0.6, 1); camera.add(camFill); camera.add(camFill.target); camFill.target.position.set(0, 0, -1); scene.add(camera);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.85, 0.45, 0.85);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.7, 0.35, 0.9);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 function resize() {
@@ -208,10 +208,10 @@ function damageEnemy(e, base, opts = {}) {
   const crit = Math.random() < (opts.crit ?? 0.15);
   const dmg = Math.round(base * (0.9 + Math.random() * 0.2) * (crit ? 1.8 : 1));
   e.hp -= dmg; updateHpBar(e);
-  e.flashT = 0.07; setFlash(e, true);
+  e.flashT = 0.05; setFlash(e, true);
   const hp = e.root.position.clone(); hp.y += e.K.h * 0.6;
   dmgNum(hp, dmg, crit ? 'crit' : '');
-  fx.burst(hp, crit ? 26 : 14, crit ? 0xfff0a0 : 0x6fd8ff, 7, 0.45, -9);
+  fx.burst(hp, crit ? 16 : 8, crit ? 0xffd060 : 0x3fb8ff, 7, 0.4, -9);
   fx.burst(hp, 6, 0xff3322, 4, 0.4, -9);
   sfx(crit ? 'crit' : 'hit');
   if (crit) { hitstop = Math.max(hitstop, 0.05); shake = Math.max(shake, 0.25); }
@@ -292,7 +292,7 @@ function attackHit() {
     tmp2.copy(e.root.position).sub(P.pos).setY(0); const d = tmp2.length() - e.K.r;
     const inArc = d < (heavy ? 3.6 : 3.0) && (d < 0.6 || tmp2.normalize().dot(f) > 0.25);
     const inRing = heavy && d < 3.8;
-    if (inArc || inRing) { any = damageEnemy(e, P.atk * (heavy ? 1.9 : 1 + P.combo * 0.15), { kb: heavy ? 9 : 4 }) || any; if (heavy && any) fx.bolt(P.pos.clone().setY(1.4), e.root.position.clone().setY(1.4), [1, 2.6, 4], 0.08, 0.2); }
+    if (inArc || inRing) { any = damageEnemy(e, P.atk * (heavy ? 1.9 : 1 + P.combo * 0.15), { kb: heavy ? 9 : 4 }) || any; if (heavy && any) fx.bolt(P.pos.clone().setY(1.4), e.root.position.clone().setY(1.4), [0.5, 1.4, 2.8], 0.05, 0.18); }
   }
   if (heavy) { fx.shock(P.pos, 8, 0x5fd8ff, 0.4); fx.ringBurst(P.pos, 40, 0x5fd8ff, 10); shake = Math.max(shake, 0.3); sfx('lightning'); }
   if (any) { hitstop = Math.max(hitstop, heavy ? 0.07 : 0.03); shake = Math.max(shake, heavy ? 0.35 : 0.12); }
@@ -305,14 +305,14 @@ function useSkill(i) {
   P.mp -= sk.mp; P.cd[i] = sk.cd; hudDirty = true;
   if (i === 0) { // Lightning Burst: sky bolts on up to 6 foes + nova
     P.castT = 0.45; sfx('lightning'); shake = 0.7; hitstop = 0.06;
-    fx.shock(P.pos, 11, 0x7fe8ff, 0.55); fx.ringBurst(P.pos, 60, 0x7fe8ff, 14);
-    fx.bolt(P.pos.clone().setY(14), P.pos.clone().setY(1.5), [1.5, 3, 5], 0.22, 0.3);
+    fx.shock(P.pos, 11, 0x3fb8ff, 0.5); fx.ringBurst(P.pos, 40, 0x3fb8ff, 14);
+    fx.bolt(P.pos.clone().setY(14), P.pos.clone().addScaledVector(fwd(P.heading), 1.5).setY(0.2), [0.7, 1.7, 3.2], 0.1, 0.25);
     const targets = S.enemies.filter(e => e.state !== 'dead' && e.state !== 'spawn' && e.root.position.distanceTo(P.pos) < 11).sort((a, b) => a.root.position.distanceTo(P.pos) - b.root.position.distanceTo(P.pos)).slice(0, 6);
     targets.forEach((e, k) => setTimeout(() => {
       if (e.state === 'dead') return;
       const top = e.root.position.clone().setY(16).add(new THREE.Vector3((Math.random() - .5) * 4, 0, (Math.random() - .5) * 4));
-      fx.bolt(top, e.root.position.clone().setY(0.2), [1.5, 3, 5], 0.2, 0.3);
-      fx.bolt(P.pos.clone().setY(1.6), e.root.position.clone().setY(1.4), [1, 2.4, 4], 0.07, 0.2);
+      fx.bolt(top, e.root.position.clone().setY(0.2), [0.7, 1.7, 3.2], 0.12, 0.28);
+      fx.bolt(P.pos.clone().setY(1.6), e.root.position.clone().setY(1.4), [0.5, 1.4, 2.8], 0.05, 0.18);
       fx.shock(e.root.position, 3, 0x7fe8ff, 0.35);
       damageEnemy(e, P.atk * 2.6, { kb: 6, crit: 0.25 });
     }, 60 + k * 70));
