@@ -264,7 +264,7 @@ function hurtPlayer(dmg, from) {
 function die() {
   S.P.dead = true; S.mode = 'over'; musicIntense(false); sfx('defeat');
   fx.burst(S.P.pos.clone().setY(1.5), 150, 0x4fc8ff, 10, 1.5, -2, 2);
-  setTimeout(() => { $('#overTxt').textContent = `Reached wave ${S.wave} · Level ${S.P.lv} · ${S.kills} knights destroyed`; show('over'); }, 1300);
+  setTimeout(() => { $('#overTxt').textContent = `Reached wave ${S.wave} · Level ${S.P.lv} · ${S.kills} enemies destroyed`; show('over'); }, 1300);
 }
 function nearestEnemy(maxD, from = S.P.pos) {
   let best = null, bd = maxD;

@@ -111,7 +111,7 @@ function buildBrute() {
 export const KINDS = {
   knight: { hp: 380, speed: 3.4, range: 2.0, dmg: 48, wind: 0.55, exp: 180, r: 0.6, h: 2.6 },
   caster: { hp: 300, speed: 3.0, range: 11, dmg: 55, wind: 0.8, exp: 220, r: 0.55, h: 2.7 },
-  brute: { hp: 6200, speed: 2.6, range: 4.2, dmg: 110, wind: 1.0, exp: 1600, r: 1.6, h: 6.0 },
+  brute: { hp: 4800, speed: 2.6, range: 4.2, dmg: 110, wind: 1.0, exp: 1600, r: 1.6, h: 6.0 },
 };
 
 export function makeEnemy(kind, scene, scale = 1) {

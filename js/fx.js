@@ -40,6 +40,7 @@ export function makeFX(scene, quality) {
   // ---- slash arcs ----
   const arcTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 16; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 256, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.75, 'rgba(160,230,255,0.9)'); gr.addColorStop(1, '#fff'); g.fillStyle = gr; g.fillRect(0, 0, 256, 16); const t = new THREE.CanvasTexture(c); return t; })();
   const items = [];
+  const vLight = new THREE.PointLight(0x9a5cff, 0, 14, 1.4); scene.add(vLight);
   function arc(center, heading, radius, color, side, tilt = 0) {
     const geo = new THREE.RingGeometry(radius * 0.45, radius, 32, 1, 0, Math.PI * 1.2);
     const uv = geo.attributes.uv, p = geo.attributes.position;
@@ -87,7 +88,7 @@ export function makeFX(scene, quality) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(9 - i * 3, 9 - i * 3), mat); m.rotation.x = -Math.PI / 2; m.position.y = 0.1 + i * 0.6; g.add(m); mats.push(mat);
     }
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.6, 3.5) })); core.position.y = 1.4; g.add(core);
-    const light = new THREE.PointLight(0x9a5cff, 40, 14, 1.4); light.position.y = 2; g.add(light);
+    vLight.position.copy(center).setY(2); vLight.intensity = 40;
     scene.add(g); items.push({ m: g, t: 0, life, kind: 'vortex', mats, core });
     return g;
   }
@@ -107,12 +108,12 @@ export function makeFX(scene, quality) {
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]; it.t += dt; const k = it.t / it.life;
-      if (k >= 1) { scene.remove(it.m); it.m.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); }); items.splice(i, 1); continue; }
+      if (k >= 1) { if (it.kind === 'vortex') vLight.intensity = 0; scene.remove(it.m); it.m.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); }); items.splice(i, 1); continue; }
       if (it.kind === 'arc') { it.m.material.opacity = 1 - k; it.m.scale.setScalar(it.s0 + k * 0.4); }
       else if (it.kind === 'shock') { const s = it.r * (0.2 + 0.8 * Math.pow(k, 0.5)); it.m.scale.set(s, s, 1); it.m.material.opacity = 1 - k; }
       else if (it.kind === 'tele') { it.fill.scale.setScalar(k); it.m.material.opacity = 0.6 + Math.sin(it.t * 30) * 0.4; }
       else if (it.kind === 'bolt') { it.m.children.forEach(c => c.material.opacity = (1 - k) * (Math.random() < 0.8 ? 1 : 0.3)); }
-      else if (it.kind === 'vortex') { it.m.children[0].rotation.z += dt * 4; it.m.children[1].rotation.z -= dt * 7; const s = Math.min(1, it.t * 4) * (k > 0.9 ? (1 - k) * 10 : 1); it.m.scale.setScalar(Math.max(0.01, s)); it.core.scale.setScalar(1 + Math.sin(it.t * 20) * 0.15); }
+      else if (it.kind === 'vortex') { it.m.children[0].rotation.z += dt * 4; it.m.children[1].rotation.z -= dt * 7; const s = Math.min(1, it.t * 4) * (k > 0.9 ? (1 - k) * 10 : 1); it.m.scale.setScalar(Math.max(0.01, s)); it.core.scale.setScalar(1 + Math.sin(it.t * 20) * 0.15); vLight.intensity = 40 * Math.max(0, s); }
     }
   }
   return { burst, ringBurst, arc, shock, telegraph, bolt, vortex, update, clearAll() { for (const it of items) scene.remove(it.m); items.length = 0; life.fill(0); for (let i = 0; i < N; i++) pos[i * 3 + 1] = -999; } };
